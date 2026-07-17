@@ -1,0 +1,14 @@
+/images/
+/assets/
+
+# PyInstaller output - regenerable, not source
+/build/
+/dist/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Excel lock files
+~$*.xlsx
+~$*.xls
