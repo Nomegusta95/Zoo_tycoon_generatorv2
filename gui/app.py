@@ -8,6 +8,7 @@ from scoring.project_rewards import get_project_reward
 from core.engine import generate_full_game
 from data.data_loader import VALID_PACKS
 from data.seed_store import load_saved_seeds, save_seed_entry, delete_seed_entry
+from gui.theme_data import BADGE_MAP, PACK_LABELS, FILTERS, GROUP_ORDER, GROUP_TITLES
 
 import customtkinter as ctk
 import tkinter as tk
@@ -124,57 +125,6 @@ def group_animals(game_animals):
     return lvl0, lvl1, lvl2, lvl3, special, habitat_counts, group_counts
 
 
-BADGE_MAP = {
-    "savannah": "savannah.png",
-    "africa": "africa.png",
-    "jungle": "jungle.png",
-    "desert": "desert.png",
-    "mountain": "mountain.png",
-    "marsupial": "marsupial.png",
-    "bird": "bird.png",
-    "primate": "primate.png",
-    "ungulate": "ungulate.png",
-    "predator": "predator.png",
-    "aquatic": "aquatic.png",
-    "fish": "fish.png",
-    "reptile": "reptile.png",
-    "water": "water.png",
-    "australia": "australia.png",
-    "europe": "europe.png",
-    "asia": "asia.png",
-    "north america": "north_america.png",
-    "south america": "south_america.png",
-    "arctic": "arctic.png",
-    "carnivore": "carnivore.png",
-    "herbivore": "herbivore.png",
-    "omnivore": "omnivore.png",
-    "herd": "herd.png",
-    "pack": "herd.png",
-    "solitary": "solitary.png",
-    "arid": "arid.png",
-    "tropical": "tropical.png",
-    "temperate": "temperate.png",
-    "cold": "cold.png",
-    "wetland": "wetland.png",
-    "ocean": "ocean.png",
-    "ground": "ground.png",
-    "flying": "flying.png",
-    "swimming": "swimming.png",
-    "climbing": "climbing.png",
-    "tundra": "tundra.png",
-    "endangered": "endangered.png",
-    "tiny": "tiny.png",
-    "egg-laying": "egg-laying.png",
-    "venomous":"venomous.png",
-    "friendly": "friendly.png",
-    "nocturnal": "nocturnal.png",
-    "migratory": "migratory.png",
-    "burrowing": "burrowing.png",
-    "ancient": "ancient.png",
-    "horned": "horned.png",
-    "large": "large.png",
-}
-
 # Tier badge colors, as (light_mode, dark_mode) pairs so the badges stay
 # readable when the theme toggle switches modes. "predefined" = mandatory
 # projects, "basic" = fallback (e.g. failed-project placeholders).
@@ -207,33 +157,11 @@ REWARD_SECOND = {"bg": ("#e5e5e5", "#3a3a3a"), "fg": ("#444444", "#d4d8dc")}
 
 PROJECT_GRID_COLUMNS = 3
 
-# (display label, internal filter key)
-# Labels are kept short on purpose - CTkSegmentedButton doesn't wrap or
-# ellipsize, so anything longer gets visually clipped inside a narrow
-# sidebar (this is exactly what happened with "Level 1"/"Cospecies").
-FILTERS = [
-    ("All", "all"),
-    ("Lvl1", "level1"),
-    ("Lvl2", "level2"),
-    ("Lvl3", "level3"),
-    ("CoSp", "cospecies"),
-    ("Spec", "special"),
-]
-
-# groups shown in the sidebar, in display order
-GROUP_ORDER = ["level1", "level2", "level3", "cospecies"]
-GROUP_TITLES = {
-    "level1": "Level 1",
-    "level2": "Level 2",
-    "level3": "Level 3",
-    "cospecies": "Cospecies",
-}
-
-PACK_LABELS = {
-    "base": "Base game",
-    "shores": "New Shores",
-    "additional": "Additional Species",
-}
+# FILTERS, GROUP_ORDER, GROUP_TITLES, PACK_LABELS, BADGE_MAP: see
+# gui/theme_data.py (shared with streamlit_app.py). Labels in FILTERS are
+# kept short on purpose - CTkSegmentedButton doesn't wrap or ellipsize, so
+# anything longer gets visually clipped inside a narrow sidebar (this is
+# exactly what happened with "Level 1"/"Cospecies").
 
 
 # --- GUI APP ---
