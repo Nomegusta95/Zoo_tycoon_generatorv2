@@ -7,14 +7,14 @@ from scoring.project_rewards import (
     OR_DISCOUNT,
     MULTIPLIER_VALUE_BASELINE,
     MULTIPLIER_VALUE_BONUS_PER_UNIT,
-    COSPECIES_COUNT_DISCOUNT_STEP,
+    COSPECIES_SMALL_DISCOUNT,
     MIN_DIFFICULTY,
     DIFFICULTY_FLOOR,
 )
 
 
-def make_animal(name, type_="main", level=1, special=False):
-    return {"name": name, "type": type_, "level": level, "special": special}
+def make_animal(name, type_="main", level=1, special=False, size=None):
+    return {"name": name, "type": type_, "level": level, "special": special, "size": size}
 
 
 def make_lookup(*animals):
@@ -147,32 +147,50 @@ def test_or_alt_side_multiplier_also_counts():
     assert alt_multiplied - no_multiplier == expected_bonus
 
 
-# --- cospecies discount ---
+# --- cospecies discount (per-animal "size", not a project-wide count) ---
 
-def test_cospecies_count_discount_reduces_difficulty_per_cospecies():
-    # Swapping one main slot for a cospecies should cost less than
+def test_small_cospecies_gets_the_discount():
+    # Swapping one main slot for a SMALL cospecies should cost less than
     # SLOT_WEIGHTS["cospecies"] alone would suggest, once the discount is
     # netted against it.
     main = make_animal("Main", level=1)
-    cospecies = make_animal("Cospecies", type_="cospecies")
+    cospecies = make_animal("Cospecies", type_="cospecies", size="small")
     lookup = make_lookup(main, cospecies)
 
     all_main = compute_difficulty(["Main", "Main", "Main"], lookup)
     one_cospecies = compute_difficulty(["Main", "Main", "Cospecies"], lookup)
 
     actual_swap_cost = one_cospecies - all_main
-    expected_swap_cost = (SLOT_WEIGHTS["cospecies"] - COSPECIES_COUNT_DISCOUNT_STEP) - SLOT_WEIGHTS[1]
+    expected_swap_cost = (SLOT_WEIGHTS["cospecies"] - COSPECIES_SMALL_DISCOUNT) - SLOT_WEIGHTS[1]
     assert round(actual_swap_cost, 10) == round(expected_swap_cost, 10)
 
 
-def test_cospecies_heavy_project_scores_at_most_a_main_only_project():
+def test_big_cospecies_gets_no_discount():
+    # A BIG cospecies costs exactly SLOT_WEIGHTS["cospecies"] - no
+    # discount at all, unlike a small one.
+    main = make_animal("Main", level=1)
+    cospecies = make_animal("Cospecies", type_="cospecies", size="big")
+    lookup = make_lookup(main, cospecies)
+
+    all_main = compute_difficulty(["Main", "Main", "Main"], lookup)
+    one_cospecies = compute_difficulty(["Main", "Main", "Cospecies"], lookup)
+
+    actual_swap_cost = one_cospecies - all_main
+    expected_swap_cost = SLOT_WEIGHTS["cospecies"] - SLOT_WEIGHTS[1]
+    assert round(actual_swap_cost, 10) == round(expected_swap_cost, 10)
+
+
+def test_small_cospecies_heavy_project_scores_at_most_a_main_only_project():
     # The concrete case that motivated this rule: 2 main animals padded
-    # out to 5 slots with 3 cospecies should score no higher than the
-    # same 2 mains rounded out to 3 with one more main animal.
+    # out to 5 slots with 3 SMALL cospecies should score no higher than
+    # the same 2 mains rounded out to 3 with one more main animal. This
+    # guarantee is specific to small cospecies - a big one is deliberately
+    # exempt from the discount that makes this hold (see
+    # test_big_cospecies_is_not_guaranteed_cheaper_than_a_main_only_project).
     main1 = make_animal("Main1", level=1)
     main2 = make_animal("Main2", level=1)
     main3 = make_animal("Main3", level=1)
-    cospecies = [make_animal(f"Cospecies{i}", type_="cospecies") for i in range(3)]
+    cospecies = [make_animal(f"Cospecies{i}", type_="cospecies", size="small") for i in range(3)]
     lookup = make_lookup(main1, main2, main3, *cospecies)
 
     three_mains = compute_difficulty(["Main1", "Main2", "Main3"], lookup)
@@ -183,23 +201,44 @@ def test_cospecies_heavy_project_scores_at_most_a_main_only_project():
     assert five_with_three_cospecies <= three_mains
 
 
+def test_big_cospecies_is_not_guaranteed_cheaper_than_a_main_only_project():
+    # The mirror case: with no discount at all, 3 BIG cospecies can (and
+    # here does) score HIGHER than the equivalent main-only project -
+    # this is the intended effect of "if cospecies is big there's no
+    # penalty", not a regression of the small-cospecies guarantee above.
+    main1 = make_animal("Main1", level=1)
+    main2 = make_animal("Main2", level=1)
+    main3 = make_animal("Main3", level=1)
+    cospecies = [make_animal(f"Cospecies{i}", type_="cospecies", size="big") for i in range(3)]
+    lookup = make_lookup(main1, main2, main3, *cospecies)
+
+    three_mains = compute_difficulty(["Main1", "Main2", "Main3"], lookup)
+    five_with_three_cospecies = compute_difficulty(
+        ["Main1", "Main2", "Cospecies0", "Cospecies1", "Cospecies2"], lookup
+    )
+
+    assert five_with_three_cospecies > three_mains
+
+
 # --- difficulty floor ---
 
-def test_minimal_all_cospecies_project_reflects_the_new_discount():
-    # 3 cospecies slots at SLOT_WEIGHTS["cospecies"] each, minus the
-    # per-cospecies discount applied to all 3 (not just beyond the
-    # first) - still comfortably above DIFFICULTY_FLOOR for a realistic
-    # minimal (3-slot) project.
-    a = make_animal("A", type_="cospecies")
-    b = make_animal("B", type_="cospecies")
+def test_minimal_all_small_cospecies_project_reflects_the_discount():
+    # 3 small-cospecies slots at SLOT_WEIGHTS["cospecies"] each, minus
+    # the small-cospecies discount applied to all 3 - still comfortably
+    # above DIFFICULTY_FLOOR for a realistic minimal (3-slot) project.
+    a = make_animal("A", type_="cospecies", size="small")
+    b = make_animal("B", type_="cospecies", size="small")
     lookup = make_lookup(a, b)
 
     entries = ["A OR B", "A OR B", "A"]
     difficulty = compute_difficulty(entries, lookup)
 
-    raw = 3 * SLOT_WEIGHTS["cospecies"] - 3 * COSPECIES_COUNT_DISCOUNT_STEP
+    raw = 3 * SLOT_WEIGHTS["cospecies"] - 3 * COSPECIES_SMALL_DISCOUNT
     assert raw > DIFFICULTY_FLOOR
-    assert difficulty == raw
+    # round() rather than exact equality - the discount is subtracted
+    # once per small cospecies in a loop, not as a single multiplication,
+    # so the two sides can differ in the last float bit.
+    assert round(difficulty, 10) == round(raw, 10)
 
 
 def test_difficulty_floor_still_engages_for_a_pathologically_cheap_input():

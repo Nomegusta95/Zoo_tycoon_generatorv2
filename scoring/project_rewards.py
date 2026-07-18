@@ -18,6 +18,14 @@ SLOT_WEIGHTS = {
 }
 SPECIAL_WEIGHT = 2.75
 
+# A project containing a level-3 animal gets this on top of that animal's
+# own SLOT_WEIGHTS[3] entry - a level-3 species is the rarest non-special
+# tier, and a project built around one should read as noticeably harder
+# than the same project would with a level-2 in its place, not just
+# +0.25 harder. MAX_LVL3_PER_PROJECT is 1, so this is a flat per-project
+# bump rather than something that needs to scale with a count.
+LVL3_PROJECT_BONUS = 1.5
+
 # More MAIN animals is harder on its own, beyond what summing slot
 # weights already implies - each main slot past the minimum size of 3
 # adds a bit more. Cospecies count toward this too, but only partially
@@ -44,17 +52,15 @@ OR_DISCOUNT = 0.0
 MULTIPLIER_VALUE_BASELINE = 3
 MULTIPLIER_VALUE_BONUS_PER_UNIT = 0.25
 
-# Cospecies are easier to come by than main species, so leaning on them
-# actively makes a project easier, not just "cheaper per slot" - this is
-# subtracted per cospecies (not just beyond the first), on top of their
-# own (lower) SLOT_WEIGHTS entry above. Combined with
-# COSPECIES_SIZE_BONUS_RATE above, a project padded out with cospecies
-# still scores at or below an equivalent-size project built from main
-# species alone (verified: 2 main + 3 cospecies vs. 3 main, across every
-# level combination), just with a smaller margin than before - softened
-# from 0.35 since the previous value pulled overall game difficulty down
-# too far (games were skewing heavily toward "easy").
-COSPECIES_COUNT_DISCOUNT_STEP = 0.3
+# Cospecies are easier to come by than main species, so a "small" one
+# (see the "size" field on the animal, from data/Animals.xlsx) gets this
+# knocked off on top of its own (lower) SLOT_WEIGHTS entry above - it's
+# a minor, easy-to-spot filler. A "big" cospecies (e.g. West caucasian
+# tur, Great hornbill) does NOT get this discount at all - despite being
+# cospecies-tier, it's a substantial enough animal that padding a project
+# out with it shouldn't make that project easier. This is a per-animal
+# rule (each cospecies' own size), not a per-project cospecies-count rule.
+COSPECIES_SMALL_DISCOUNT = 0.3
 
 MIN_DIFFICULTY = 3
 DIFFICULTY_FLOOR = 0.5
@@ -82,6 +88,7 @@ def compute_difficulty(entries, lookup):
     or_count = 0
     main_count = 0
     cospecies_count = 0
+    has_lvl3 = False
 
     for entry in entries:
         parts = entry.split(" OR ")
@@ -112,13 +119,19 @@ def compute_difficulty(entries, lookup):
         if animal:
             if animal["type"] != "main":
                 cospecies_count += 1
+                if animal.get("size") == "small":
+                    total -= COSPECIES_SMALL_DISCOUNT
             else:
                 main_count += 1
+                if animal["level"] == 3:
+                    has_lvl3 = True
 
     effective_size_count = main_count + COSPECIES_SIZE_BONUS_RATE * cospecies_count
     total += SIZE_BONUS_PER_SLOT * max(0, effective_size_count - 3)
     total -= OR_DISCOUNT * or_count
-    total -= COSPECIES_COUNT_DISCOUNT_STEP * cospecies_count
+
+    if has_lvl3:
+        total += LVL3_PROJECT_BONUS
 
     return max(total, DIFFICULTY_FLOOR)
 
