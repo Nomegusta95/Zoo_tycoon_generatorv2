@@ -148,6 +148,11 @@ def _init_state():
         "last_lookup": None,
         "current_seed": None,
         "required_animals": set(),
+        # Subset of required_animals guaranteed a dedicated project, not
+        # just pool membership - see the "Force into a project"
+        # multiselect in _render_sidebar and core.engine.generate_full_game's
+        # required-vs-forced distinction.
+        "forced_animals": set(),
         "active_packs": set(VALID_PACKS),
         "include_predefined": True,
         "generation_mode": "freeform",
@@ -170,6 +175,7 @@ def _run_generation(seed, animals, predefined):
 
     pool_animals = [a for a in animals if a["pack"] in active_packs]
     required = list(st.session_state.required_animals)
+    forced = list(st.session_state.forced_animals)
     predefined_arg = predefined if st.session_state.include_predefined else []
 
     # A locked project's animals only make sense against the pool they
@@ -189,6 +195,7 @@ def _run_generation(seed, animals, predefined):
             pool_animals, required, predefined_arg,
             locked_projects=st.session_state.locked_projects,
             mode=st.session_state.generation_mode,
+            forced=forced,
             **pool_kwargs
         )
     except Exception as e:
@@ -414,6 +421,9 @@ def _render_sidebar(animals):
         n for n in st.session_state.required_animals
         if n in animals_by_name and animals_by_name[n]["pack"] in active
     }
+    # forced_animals is always a subset of required_animals - dropping a
+    # pack can shrink the latter, so re-clamp the former to match.
+    st.session_state.forced_animals &= st.session_state.required_animals
 
     st.sidebar.divider()
     st.sidebar.header("Required animals")
@@ -435,11 +445,32 @@ def _render_sidebar(animals):
     current_labels = [name_to_label[n] for n in st.session_state.required_animals if n in name_to_label]
 
     chosen_labels = st.sidebar.multiselect(
-        "Search and select (type to filter)",
+        "Search and select (type to filter) - guarantees a spot in the "
+        "generated pool, not necessarily in a project",
         options=sorted(label_to_name.keys()),
         default=current_labels,
     )
     st.session_state.required_animals = {label_to_name[label] for label in chosen_labels}
+    # forced_animals can only reference animals still required after the
+    # multiselect above just ran.
+    st.session_state.forced_animals &= st.session_state.required_animals
+
+    # Second level: escalate a required animal to guarantee it a
+    # dedicated project (see core.engine.generate_full_game's `forced`
+    # param), not just pool membership - options are restricted to
+    # whatever's currently required, since forcing implies requiring.
+    force_options = sorted(
+        name_to_label[n] for n in st.session_state.required_animals if n in name_to_label
+    )
+    current_forced_labels = [
+        name_to_label[n] for n in st.session_state.forced_animals if n in name_to_label
+    ]
+    chosen_forced_labels = st.sidebar.multiselect(
+        "Force into a project (guarantees a dedicated project, not just the pool)",
+        options=force_options,
+        default=[label for label in current_forced_labels if label in force_options],
+    )
+    st.session_state.forced_animals = {label_to_name[label] for label in chosen_forced_labels}
 
 
 # -----------------------------------------------------------
@@ -477,6 +508,7 @@ def _render_seed_bar(animals, predefined):
                         "seed": st.session_state.current_seed,
                         "active_packs": sorted(st.session_state.active_packs),
                         "required_animals": sorted(st.session_state.required_animals),
+                        "forced_animals": sorted(st.session_state.forced_animals),
                         "include_predefined": st.session_state.include_predefined,
                         "saved_at": datetime.now().isoformat(timespec="seconds"),
                     }
@@ -497,6 +529,10 @@ def _render_seed_bar(animals, predefined):
                     if st.button("Load", key=f"load_seed_{entry['name']}"):
                         st.session_state.active_packs = set(entry.get("active_packs", []))
                         st.session_state.required_animals = set(entry.get("required_animals", []))
+                        # Absent in seeds saved before the pool-vs-forced
+                        # distinction existed - absent means none were
+                        # forced, not that the key is missing/broken.
+                        st.session_state.forced_animals = set(entry.get("forced_animals", []))
                         st.session_state.include_predefined = entry.get("include_predefined", True)
                         st.session_state.locked_projects = {}
                         st.session_state.last_game_animals = None

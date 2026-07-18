@@ -139,9 +139,17 @@ TIER_STYLES = {
 # Other (light_mode, dark_mode) color pairs used across the sidebar.
 ROW_BORDER_DEFAULT = ("#d0d0d0", "#444444")
 ROW_FILL_DEFAULT = ("#eaeaea", "#2b2b2b")
+# "pool" required state (blue) - guaranteed somewhere in the ~35-animal
+# pool, but not necessarily in any specific project.
 ROW_BORDER_SELECTED = ("#1f6fd6", "#3399ff")
 ROW_FILL_SELECTED = ("#3a7ebf", "#1f538d")
+# "forced" required state (green) - a second click on an already-required
+# row escalates it to this: guaranteed a dedicated project, not just pool
+# membership. See gui.app.ZooApp.required_state.
+ROW_BORDER_FORCED = ("#1f8f4a", "#2fd97a")
+ROW_FILL_FORCED = ("#2f8f5a", "#1f6b3a")
 CHIP_FILL = ("#3a7ebf", "#1f538d")
+CHIP_FILL_FORCED = ("#2f8f5a", "#1f6b3a")
 CHIP_REMOVE_HOVER = ("#cfe0f2", "#16375c")
 DIVIDER_COLOR = ("#d0d0d0", "#444444")
 REWARD_FIRST = {"bg": ("#faecc8", "#4a3a12"), "fg": ("#8a5a00", "#f2c766")}
@@ -185,11 +193,20 @@ class ZooApp:
         self.badge_map = BADGE_MAP
         self.image_cache = {}
         self.badge_color_cache = {}
-        self.selected_animals = set()
+
+        # name -> "pool" (guaranteed somewhere in the generated pool) or
+        # "forced" (guaranteed its own dedicated project). Clicking an
+        # unrequired row moves it to "pool"; clicking an already-"pool"
+        # row escalates it to "forced"; clicking a "forced" row clears it
+        # entirely - see _cycle_animal_required_state.
+        self.required_state = {}
 
         # name -> row frame, so a chip removal or a row click can both
         # keep the selection highlight in sync
         self.animal_rows = {}
+        # name -> checkmark label, updated alongside animal_rows' border
+        # (see _apply_row_selection_style)
+        self.animal_checkmarks = {}
         # filter_key -> {"title", "container", "header", "inner", "state", "rows"}
         self.groups = {}
         self.current_filter = "all"
@@ -411,11 +428,28 @@ class ZooApp:
             fill="x", padx=10, pady=(0, 8)
         )
 
+        required_header_row = ctk.CTkFrame(sidebar, fg_color="transparent")
+        required_header_row.pack(fill="x", padx=10, pady=(10, 4))
+
         ctk.CTkLabel(
-            sidebar,
+            required_header_row,
             text="Select animals (required)",
             font=("Arial", 13, "bold")
-        ).pack(anchor="w", padx=10, pady=(10, 4))
+        ).pack(side="left")
+
+        required_help_icon = ctk.CTkLabel(
+            required_header_row, text="ⓘ", font=("Arial", 14, "bold"),
+            text_color="gray60", width=18
+        )
+        required_help_icon.pack(side="left", padx=(4, 0))
+        Tooltip(
+            required_help_icon,
+            "Click an animal once to require it - guaranteed somewhere "
+            "in the generated pool, but not necessarily in any project.\n\n"
+            "Click it again to force it - guaranteed its own dedicated "
+            "project, not just pool membership.\n\n"
+            "Click a third time to clear it."
+        )
 
         ctk.CTkEntry(
             sidebar,
@@ -675,15 +709,27 @@ class ZooApp:
             anchor="w",
             font=("Arial", 12)
         )
-        label.pack(fill="x", padx=10, pady=6)
+        label.pack(side="left", fill="x", expand=True, padx=(10, 4), pady=6)
+
+        # Blank when unselected, a checkmark glyph when required - see
+        # _apply_row_selection_style, the single place both this and
+        # _load_seed_entry go through to keep the border/fill highlight
+        # and this checkmark from drifting out of sync with each other.
+        checkmark = ctk.CTkLabel(
+            frame, text="", font=("Arial", 14, "bold"),
+            text_color=ROW_BORDER_SELECTED, width=18
+        )
+        checkmark.pack(side="right", padx=(0, 10), pady=6)
 
         def toggle(event=None):
-            self.set_animal_selected(name, name not in self.selected_animals)
+            self._cycle_animal_required_state(name)
 
         frame.bind("<Button-1>", toggle)
         label.bind("<Button-1>", toggle)
+        checkmark.bind("<Button-1>", toggle)
 
         self.animal_rows[name] = frame
+        self.animal_checkmarks[name] = checkmark
         return frame
 
     def _on_filter_changed(self, value):
@@ -701,10 +747,10 @@ class ZooApp:
         # longer in the pool at all) - drop it instead of leaving that
         # mismatch between what's shown and what's used.
         active = self._active_packs()
-        for name in list(self.selected_animals):
+        for name in list(self.required_state):
             a = self.animals_by_name.get(name)
             if a and a["pack"] not in active:
-                self.set_animal_selected(name, False)
+                self._set_animal_required_state(name, None)
 
         self.refresh_animal_list()
 
@@ -754,31 +800,66 @@ class ZooApp:
     # REQUIRED ANIMALS PANEL
     # -----------------------------------------------------------
 
-    def set_animal_selected(self, name, selected):
-        if selected:
-            self.selected_animals.add(name)
-        else:
-            self.selected_animals.discard(name)
-
+    def _apply_row_selection_style(self, name, state):
+        """Single place that styles an animal row for its required
+        state (None/"pool"/"forced") - both the border/fill highlight
+        and the checkmark glyph, so the two things can't drift out of
+        sync with each other. Used by both _set_animal_required_state (a
+        row/chip click) and _load_seed_entry (restoring a saved seed's
+        required list)."""
         frame = self.animal_rows.get(name)
         if frame:
-            if selected:
+            if state == "forced":
+                frame.configure(border_width=3, border_color=ROW_BORDER_FORCED, fg_color=ROW_FILL_FORCED)
+            elif state == "pool":
                 frame.configure(border_width=3, border_color=ROW_BORDER_SELECTED, fg_color=ROW_FILL_SELECTED)
             else:
                 frame.configure(border_width=2, border_color=ROW_BORDER_DEFAULT, fg_color=ROW_FILL_DEFAULT)
 
+        checkmark = self.animal_checkmarks.get(name)
+        if checkmark:
+            if state == "forced":
+                checkmark.configure(text="✓✓", text_color=ROW_BORDER_FORCED)
+            elif state == "pool":
+                checkmark.configure(text="✓", text_color=ROW_BORDER_SELECTED)
+            else:
+                checkmark.configure(text="")
+
+    def _set_animal_required_state(self, name, state):
+        """state: None (not required), "pool" (guaranteed in the pool
+        only), or "forced" (guaranteed its own dedicated project)."""
+        if state is None:
+            self.required_state.pop(name, None)
+        else:
+            self.required_state[name] = state
+
+        self._apply_row_selection_style(name, state)
         self._refresh_required_chips()
+
+    def _cycle_animal_required_state(self, name):
+        """A row click cycles: not required -> pool -> forced -> not
+        required. Escalating to "forced" is the explicit second click
+        the user asked for - a plain single click only guarantees pool
+        membership, matching generate_full_game's `required` vs `forced`
+        distinction (see core/engine.py)."""
+        current = self.required_state.get(name)
+        if current is None:
+            self._set_animal_required_state(name, "pool")
+        elif current == "pool":
+            self._set_animal_required_state(name, "forced")
+        else:
+            self._set_animal_required_state(name, None)
 
     def _refresh_required_chips(self):
         for widget in self.required_chips.winfo_children():
             widget.destroy()
 
-        self.required_count_label.configure(text=f"({len(self.selected_animals)})")
+        self.required_count_label.configure(text=f"({len(self.required_state)})")
 
-        if not self.selected_animals:
+        if not self.required_state:
             ctk.CTkLabel(
                 self.required_chips,
-                text="Click animals above to require them.",
+                text="Click an animal to require it (pool only); click again to force it into its own project.",
                 text_color="gray60",
                 font=("Arial", 11),
                 wraplength=260,
@@ -786,18 +867,23 @@ class ZooApp:
             ).pack(anchor="w")
             return
 
-        for name in sorted(self.selected_animals):
-            chip = ctk.CTkFrame(self.required_chips, corner_radius=8, fg_color=CHIP_FILL)
+        for name in sorted(self.required_state):
+            forced = self.required_state[name] == "forced"
+            chip = ctk.CTkFrame(
+                self.required_chips, corner_radius=8,
+                fg_color=CHIP_FILL_FORCED if forced else CHIP_FILL
+            )
             chip.pack(fill="x", pady=2)
 
+            label_text = f"✓✓ {name}" if forced else name
             ctk.CTkLabel(
-                chip, text=name, font=("Arial", 11), text_color="white", anchor="w"
+                chip, text=label_text, font=("Arial", 11), text_color="white", anchor="w"
             ).pack(side="left", fill="x", expand=True, padx=(8, 2), pady=4)
 
             ctk.CTkButton(
                 chip, text="×", width=20, height=20, corner_radius=10,
                 fg_color="transparent", hover_color=CHIP_REMOVE_HOVER,
-                command=lambda n=name: self.set_animal_selected(n, False)
+                command=lambda n=name: self._set_animal_required_state(n, None)
             ).pack(side="right", padx=4, pady=2)
 
     # -----------------------------------------------------------
@@ -1214,7 +1300,8 @@ class ZooApp:
         self._run_generation(seed)
 
     def _run_generation(self, seed):
-        required = list(self.selected_animals)
+        required = list(self.required_state)
+        forced = [name for name, state in self.required_state.items() if state == "forced"]
         predefined = self.predefined if self.include_predefined_var.get() else []
 
         active_packs = self._active_packs()
@@ -1242,6 +1329,7 @@ class ZooApp:
                 animals, required, predefined,
                 locked_projects=self.locked_projects,
                 mode=mode,
+                forced=forced,
                 **pool_kwargs
             )
         except Exception as e:
@@ -1285,7 +1373,8 @@ class ZooApp:
             "name": name,
             "seed": self.current_seed,
             "active_packs": sorted(self._active_packs()),
-            "required_animals": sorted(self.selected_animals),
+            "required_animals": sorted(self.required_state),
+            "forced_animals": sorted(n for n, s in self.required_state.items() if s == "forced"),
             "include_predefined": self.include_predefined_var.get(),
             "saved_at": datetime.now().isoformat(timespec="seconds"),
         }
@@ -1345,15 +1434,17 @@ class ZooApp:
         for pack, var in self.pack_vars.items():
             var.set(pack in active)
 
-        self.selected_animals = {
-            n for n in entry.get("required_animals", []) if n in self.animals_by_name
+        # "forced_animals" doesn't exist in seeds saved before the
+        # pool-vs-forced distinction was added - absent means none of
+        # them were forced, not that the key is missing/broken.
+        forced_names = set(entry.get("forced_animals", []))
+        self.required_state = {
+            n: ("forced" if n in forced_names else "pool")
+            for n in entry.get("required_animals", [])
+            if n in self.animals_by_name
         }
-        for name, frame in self.animal_rows.items():
-            selected = name in self.selected_animals
-            if selected:
-                frame.configure(border_width=3, border_color=ROW_BORDER_SELECTED, fg_color=ROW_FILL_SELECTED)
-            else:
-                frame.configure(border_width=2, border_color=ROW_BORDER_DEFAULT, fg_color=ROW_FILL_DEFAULT)
+        for name in self.animal_rows:
+            self._apply_row_selection_style(name, self.required_state.get(name))
         self._refresh_required_chips()
         self.refresh_animal_list()
 

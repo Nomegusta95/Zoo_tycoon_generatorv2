@@ -25,6 +25,32 @@ def project_similarity(p1, p2):
     return len(s1 & s2) / len(s1 | s2)
 
 
+# --- FORCED SELECTION ---
+
+def generate_forced_project(animals, usage, required_name, lookup=None, usable=None, attempts=150):
+    """Repeatedly generates a project until one that actually contains
+    required_name comes up (checked via extract_names, which expands OR
+    pairs - a required animal showing up only as the alt side of an OR
+    still counts), instead of generate_best_project's soft scoring bias,
+    which only prefers a project containing a required animal among
+    whatever random candidates it happens to generate - it can (and
+    empirically does, ~17% of games) end up choosing one that never
+    includes it at all. Returns None if no attempt worked (e.g. the
+    animal's already at its global usage cap from an earlier project) -
+    the caller treats that as "couldn't force this one" and moves on."""
+    if lookup is None:
+        lookup = {a["name"]: a for a in animals}
+    if usable is None:
+        usable = [a for a in animals if a["type"] in ("main", "cospecies")]
+
+    for _ in range(attempts):
+        p = generate_project(animals, usage.copy(), lookup=lookup, usable=usable)
+        if p and required_name in extract_names(p):
+            return p
+
+    return None
+
+
 # --- SIMPLE SELECTION ---
 
 def generate_best_project(
