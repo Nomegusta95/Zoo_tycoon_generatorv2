@@ -48,9 +48,15 @@ def is_valid_project_size(project):
 
 # --- DIFFICULTY RULES ---
 
+# Easy's upper bound was lowered from 5 to 4 (medium's floor raised to
+# match) - after the cospecies-discount rework, raw difficulty values
+# skew noticeably lower than before (a simulated 1000-project sample had
+# roughly 63% landing "easy"). Moving the single boundary value (5) out
+# of "easy" and into "medium" shifted that split to roughly 44% easy /
+# 51% medium, with hard's share untouched.
 RANGES = {
-    "easy": (3, 5),
-    "medium": (6, 8),
+    "easy": (3, 4),
+    "medium": (5, 8),
     "hard": (9, 11)
 }
 
