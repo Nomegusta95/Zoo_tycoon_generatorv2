@@ -88,3 +88,30 @@ TIER_LABELS = {
     "predefined": "Mandatory",
     "basic": "Basic",
 }
+
+
+def average_badge_color(path):
+    """Average RGB (0-255 ints) of the non-transparent pixels in a badge
+    image at the given path - used to tint a project card's background
+    to roughly match its badge. Returns None if the image can't be read
+    or is fully transparent. Pillow-only (no tkinter/streamlit), so both
+    frontends can call this with their own resolved badge file path."""
+    from PIL import Image
+
+    try:
+        img = Image.open(path).convert("RGBA")
+    except Exception:
+        return None
+
+    r_total = g_total = b_total = count = 0
+    for r, g, b, a in img.getdata():
+        if a < 16:
+            continue
+        r_total += r
+        g_total += g
+        b_total += b
+        count += 1
+
+    if count == 0:
+        return None
+    return (r_total // count, g_total // count, b_total // count)

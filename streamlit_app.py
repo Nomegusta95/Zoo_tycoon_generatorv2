@@ -36,11 +36,18 @@ from core.engine import generate_full_game
 from data.data_loader import load_animals, VALID_PACKS
 from data.predefined_loader import load_predefined_projects
 from scoring.project_rewards import get_project_reward
-from gui.theme_data import BADGE_MAP, PACK_LABELS, GROUP_TITLES, TIER_LABELS
+from gui.theme_data import BADGE_MAP, PACK_LABELS, GROUP_TITLES, TIER_LABELS, average_badge_color
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ANIMALS_PATH = os.path.join(BASE_DIR, "data", "Animals.xlsx")
 PREDEFINED_PATH = os.path.join(BASE_DIR, "data", "Predefined projects.xlsx")
+
+# Card background is a low-alpha overlay of the badge's average color,
+# not a solid blended hex - an rgba overlay adapts automatically to
+# Streamlit's light/dark theme (whatever's underneath shows through),
+# unlike the desktop app which has to precompute a blended solid color
+# since CTk/Tkinter widgets don't support alpha-transparent fills.
+CARD_TINT_ALPHA = 0.18
 
 TIER_COLORS = {
     "easy": ("#8fe3b3", "#123322"),
@@ -107,6 +114,26 @@ def _pil_to_data_uri(img):
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+@st.cache_data(show_spinner=False)
+def _badge_avg_color(theme):
+    filename = BADGE_MAP.get((theme or "").strip().lower())
+    if not filename:
+        return None
+    path = os.path.join(BASE_DIR, "assets", "images", "badges", filename)
+    return average_badge_color(path)
+
+
+def _card_tint_style(theme_values):
+    """rgba() background-color CSS for a card, averaged across 1
+    (normal) or 3 (symbiosis) badge colors. Empty string (no tint) if
+    none of the badges have a resolvable color."""
+    colors = [c for c in (_badge_avg_color(v) for v in theme_values) if c]
+    if not colors:
+        return ""
+    avg = tuple(sum(c[i] for c in colors) // len(colors) for i in range(3))
+    return f"background-color: rgba({avg[0]}, {avg[1]}, {avg[2]}, {CARD_TINT_ALPHA});"
 
 
 # -----------------------------------------------------------
@@ -266,6 +293,12 @@ def _render_card(index, project, lookup):
         border_color = SYMBIOSIS_BORDER if symbiosis else DEFAULT_BORDER
         border_width = "3px" if symbiosis else "1px"
 
+        theme_values = (
+            [value for _dim, value in project["symbiosis_badges"]] if symbiosis
+            else [project.get("theme")]
+        )
+        tint_style = _card_tint_style(theme_values)
+
         badges_html = ""
         if symbiosis:
             imgs = []
@@ -298,7 +331,7 @@ def _render_card(index, project, lookup):
             )
 
         card_html = f"""
-        <div class="zoo-card" style="border-color:{border_color}; border-width:{border_width};">
+        <div class="zoo-card" style="border-color:{border_color}; border-width:{border_width}; {tint_style}">
           <div class="reward-row">
             <span class="reward-pill reward-first">1st&nbsp;&nbsp;{reward['first']}</span>
             <span class="reward-pill reward-second">2nd&nbsp;&nbsp;{reward['second']}</span>

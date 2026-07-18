@@ -8,7 +8,7 @@ from scoring.project_rewards import get_project_reward
 from core.engine import generate_full_game
 from data.data_loader import VALID_PACKS
 from data.seed_store import load_saved_seeds, save_seed_entry, delete_seed_entry
-from gui.theme_data import BADGE_MAP, PACK_LABELS, FILTERS, GROUP_ORDER, GROUP_TITLES
+from gui.theme_data import BADGE_MAP, PACK_LABELS, FILTERS, GROUP_ORDER, GROUP_TITLES, average_badge_color
 
 import customtkinter as ctk
 import tkinter as tk
@@ -155,6 +155,13 @@ CARD_BORDER_WIDTH_SYMBIOSIS = 3
 CARD_BORDER_COLOR_SYMBIOSIS = ("#c9a227", "#e0b93a")
 REWARD_SECOND = {"bg": ("#e5e5e5", "#3a3a3a"), "fg": ("#444444", "#d4d8dc")}
 
+# Card background is tinted toward its badge's average color, blended
+# against the theme's real default card fill (captured once, like the
+# border default) - CTk/Tkinter fills are solid, not alpha-transparent,
+# so (unlike the Streamlit version's simple rgba overlay) this has to
+# precompute an actual blended hex color for each of light/dark mode.
+CARD_TINT_OPACITY = 0.22
+
 PROJECT_GRID_COLUMNS = 3
 
 # FILTERS, GROUP_ORDER, GROUP_TITLES, PACK_LABELS, BADGE_MAP: see
@@ -177,6 +184,7 @@ class ZooApp:
 
         self.badge_map = BADGE_MAP
         self.image_cache = {}
+        self.badge_color_cache = {}
         self.selected_animals = set()
 
         # name -> row frame, so a chip removal or a row click can both
@@ -538,8 +546,16 @@ class ZooApp:
             # Captured once so a symbiosis card's gold border (see
             # _apply_card_border) can be reverted back to the real theme
             # default later, instead of hardcoding a guessed default color.
+            # fg_color similarly backs the badge-color card tint (see
+            # _apply_card_fill) - resolved to RGB once too, since CTk's
+            # default fill is a named Tk color ("gray92" etc.), not hex,
+            # and blending needs actual numbers.
             if i == 0:
                 self._card_border_color_default = frame.cget("border_color")
+                self._card_fill_color_default = frame.cget("fg_color")
+                self._card_fill_rgb_default = tuple(
+                    self._resolve_tk_color_to_rgb(c) for c in self._card_fill_color_default
+                )
 
             header = ctk.CTkFrame(frame, fg_color="transparent")
             header.pack(fill="x", padx=10, pady=(10, 0))
@@ -869,6 +885,21 @@ class ZooApp:
 
         return self.image_cache[key]
 
+    def _badge_path(self, theme):
+        if not theme:
+            return None
+        filename = self.badge_map.get(theme.strip().lower())
+        if not filename:
+            return None
+        return resource_path(os.path.join("assets", "images", "badges", filename))
+
+    def _badge_avg_color(self, theme):
+        key = (theme or "").strip().lower()
+        if key not in self.badge_color_cache:
+            path = self._badge_path(theme)
+            self.badge_color_cache[key] = average_badge_color(path) if path else None
+        return self.badge_color_cache[key]
+
     # -----------------------------------------------------------
     # PROJECT CARDS
     # -----------------------------------------------------------
@@ -877,6 +908,42 @@ class ZooApp:
         style = TIER_STYLES.get(tier, TIER_STYLES["basic"])
         badge = self.project_tier_badges[index]
         badge.configure(text=style["label"], fg_color=style["bg"], text_color=style["fg"])
+
+    def _resolve_tk_color_to_rgb(self, color):
+        r16, g16, b16 = self.root.winfo_rgb(color)
+        return (r16 // 256, g16 // 256, b16 // 256)
+
+    def _blend_rgb_to_hex(self, base_rgb, tint_rgb, opacity):
+        r = int(tint_rgb[0] * opacity + base_rgb[0] * (1 - opacity))
+        g = int(tint_rgb[1] * opacity + base_rgb[1] * (1 - opacity))
+        b = int(tint_rgb[2] * opacity + base_rgb[2] * (1 - opacity))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def _apply_card_fill(self, index, project):
+        """Tints the card's background toward its badge's average color,
+        blended against the real theme default (see _card_fill_rgb_default)
+        for both light and dark mode - CTk fills are solid, not
+        alpha-transparent, so this precomputes an actual blended hex
+        rather than layering a translucent overlay (contrast the
+        Streamlit version's simpler rgba() approach)."""
+        frame, _title = self.project_frames[index]
+
+        if project and project.get("symbiosis") and project.get("symbiosis_badges"):
+            theme_values = [value for _dim, value in project["symbiosis_badges"]]
+        else:
+            theme_values = [project.get("theme")] if project else []
+
+        colors = [c for c in (self._badge_avg_color(v) for v in theme_values) if c]
+
+        if not colors:
+            frame.configure(fg_color=self._card_fill_color_default)
+            return
+
+        avg = tuple(sum(c[i] for c in colors) // len(colors) for i in range(3))
+        light_base, dark_base = self._card_fill_rgb_default
+        light_hex = self._blend_rgb_to_hex(light_base, avg, CARD_TINT_OPACITY)
+        dark_hex = self._blend_rgb_to_hex(dark_base, avg, CARD_TINT_OPACITY)
+        frame.configure(fg_color=(light_hex, dark_hex))
 
     def _apply_card_border(self, index, symbiosis):
         frame, _title = self.project_frames[index]
@@ -1196,6 +1263,7 @@ class ZooApp:
             self._apply_tier_badge(i, p.get("tier"))
             self._apply_lock_button(i)
             self._apply_card_border(i, p.get("symbiosis", False))
+            self._apply_card_fill(i, p)
             self.render_project(container, p, lookup)
 
         self.render_summary(game_animals)
