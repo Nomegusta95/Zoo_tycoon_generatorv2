@@ -45,8 +45,16 @@ def matches_unlock_group(animal, req_group):
     return any(group in animal_groups for group in req_groups)
 
 
-def count_matches_in_pool(pool, req_group):
-    return sum(1 for animal in pool if matches_unlock_group(animal, req_group))
+def count_matches_in_pool(pool, req_group, exclude_name=None):
+    """exclude_name excludes the requiring animal itself from its own
+    count - e.g. Tasmanian Devil (unlock_group="marsupial",
+    unlock_count=2) is itself a marsupial, so without this it would
+    silently count toward satisfying its own requirement, needing only 1
+    OTHER marsupial instead of the intended 2."""
+    return sum(
+        1 for animal in pool
+        if animal["name"] != exclude_name and matches_unlock_group(animal, req_group)
+    )
 
 
 def check_required_special(required_animals):
@@ -183,10 +191,10 @@ def enforce_pool_requirements(selected_animals, allowed_animals, protected_names
         req_group = animal.get("unlock_group")
         req_count = animal.get("unlock_count", 0)
 
-        if not req_group or count_matches_in_pool(selected_animals, req_group) >= req_count:
+        if not req_group or count_matches_in_pool(selected_animals, req_group, exclude_name=animal["name"]) >= req_count:
             continue
 
-        needed = req_count - count_matches_in_pool(selected_animals, req_group)
+        needed = req_count - count_matches_in_pool(selected_animals, req_group, exclude_name=animal["name"])
         candidates = [
             candidate for candidate in allowed_animals
             if matches_unlock_group(candidate, req_group) and candidate not in selected_animals
@@ -197,14 +205,23 @@ def enforce_pool_requirements(selected_animals, allowed_animals, protected_names
         if len(added_animals) < needed:
             return None  # Cannot satisfy requirements; fail early
 
+        # Tracks names just swapped IN during this same requirement's
+        # batch, so a later swap in the same batch can't pick one of them
+        # as its swap-OUT target - satisfying an unlock_count of 2+ needs
+        # 2+ genuinely distinct additions, not one added then immediately
+        # displaced by the next.
+        just_added_names = set()
+
         for new_animal in added_animals:
             for i, old_animal in enumerate(selected_animals):
                 if (
                     old_animal["name"] != animal["name"]
                     and old_animal["name"] not in protected_names
+                    and old_animal["name"] not in just_added_names
                     and old_animal["level"] == new_animal["level"]
                 ):
                     selected_animals[i] = new_animal
+                    just_added_names.add(new_animal["name"])
                     break
             else:
                 # No same-level, non-protected animal available to swap
@@ -223,7 +240,7 @@ def enforce_pool_requirements(selected_animals, allowed_animals, protected_names
     for animal in selected_animals:
         req_group = animal.get("unlock_group")
         req_count = animal.get("unlock_count", 0)
-        if req_group and count_matches_in_pool(selected_animals, req_group) < req_count:
+        if req_group and count_matches_in_pool(selected_animals, req_group, exclude_name=animal["name"]) < req_count:
             return None
 
     return selected_animals

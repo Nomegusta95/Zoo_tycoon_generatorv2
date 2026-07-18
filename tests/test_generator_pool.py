@@ -46,6 +46,18 @@ def test_count_matches_in_pool():
     assert count_matches_in_pool(pool, "reptile") == 0
 
 
+def test_count_matches_in_pool_excludes_named_animal():
+    # A requiring animal that's itself a member of its own required group
+    # (e.g. Tasmanian Devil, unlock_group="marsupial") must not count
+    # toward its own requirement.
+    pool = [
+        make_animal("Tasmanian Devil", groups={"marsupial"}),
+        make_animal("Koala", groups={"marsupial"}),
+    ]
+    assert count_matches_in_pool(pool, "marsupial") == 2
+    assert count_matches_in_pool(pool, "marsupial", exclude_name="Tasmanian Devil") == 1
+
+
 # --- validate_level_counts ---
 
 def _build_full_pool():
@@ -106,3 +118,32 @@ def test_enforce_pool_requirements_swaps_in_matching_candidate():
     # stays balanced); Needer's requirement is now satisfied.
     assert result == [needer, candidate]
     assert count_matches_in_pool(result, "special_group") >= needer["unlock_count"]
+
+
+def test_enforce_pool_requirements_does_not_count_needer_toward_its_own_requirement():
+    # A needer that's itself a member of its own required group (e.g.
+    # Tasmanian Devil, unlock_group="marsupial") must pull in enough
+    # OTHER matching animals to satisfy unlock_count - it can't partially
+    # satisfy its own requirement just by existing.
+    needer = make_animal(
+        "Tasmanian Devil", level=3, groups={"marsupial"},
+        unlock_group="marsupial", unlock_count=2
+    )
+    filler1 = make_animal("Filler1", level=2)
+    filler2 = make_animal("Filler2", level=2)
+    marsupial1 = make_animal("Koala", level=2, groups={"marsupial"})
+    marsupial2 = make_animal("Kangaroo", level=2, groups={"marsupial"})
+
+    selected = [needer, filler1, filler2]
+    allowed = selected + [marsupial1, marsupial2]
+
+    random.seed(1)
+    result = enforce_pool_requirements(selected, allowed)
+
+    assert result is not None
+    result_names = {a["name"] for a in result}
+    # Both filler slots must have been swapped for real marsupials - one
+    # extra marsupial would incorrectly "satisfy" unlock_count=2 if the
+    # needer were still counting itself.
+    assert {"Koala", "Kangaroo"} <= result_names
+    assert count_matches_in_pool(result, "marsupial", exclude_name="Tasmanian Devil") >= 2
