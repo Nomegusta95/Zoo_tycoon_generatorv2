@@ -33,6 +33,7 @@ import streamlit as st
 from PIL import Image
 
 from core.engine import generate_full_game
+from core.card_export import render_project_card
 from data.data_loader import load_animals, VALID_PACKS
 from data.predefined_loader import load_predefined_projects
 from scoring.project_rewards import get_project_reward
@@ -265,7 +266,7 @@ def _group_animals(game_animals):
 
 def _render_card(index, project, lookup):
     with st.container():
-        lock_col, title_col = st.columns([1, 6])
+        lock_col, title_col, export_col = st.columns([1, 5, 1])
         with lock_col:
             is_locked = index in st.session_state.locked_projects
             if st.button("🔒" if is_locked else "🔓", key=f"lock_{index}", help="Lock/unlock this slot"):
@@ -295,6 +296,16 @@ def _render_card(index, project, lookup):
             )
 
         reward = get_project_reward(project, lookup)
+
+        with export_col:
+            card_image = render_project_card(project, lookup, reward, base_dir=BASE_DIR)
+            buf = io.BytesIO()
+            card_image.save(buf, format="PNG")
+            safe_name = "".join(c for c in project.get("name", "project") if c not in '<>:"/\\|?*')
+            st.download_button(
+                "🖼️", data=buf.getvalue(), file_name=f"{safe_name}.png", mime="image/png",
+                key=f"export_{index}", help="Download this project as a printable PNG card"
+            )
 
         symbiosis = project.get("symbiosis") and project.get("symbiosis_badges")
         border_color = SYMBIOSIS_BORDER if symbiosis else DEFAULT_BORDER

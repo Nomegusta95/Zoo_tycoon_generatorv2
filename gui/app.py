@@ -6,13 +6,14 @@ from datetime import datetime
 
 from scoring.project_rewards import get_project_reward
 from core.engine import generate_full_game
+from core.card_export import render_project_card
 from data.data_loader import VALID_PACKS
 from data.seed_store import load_saved_seeds, save_seed_entry, delete_seed_entry
 from gui.theme_data import BADGE_MAP, PACK_LABELS, FILTERS, GROUP_ORDER, GROUP_TITLES, average_badge_color
 
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox, simpledialog, filedialog
 from PIL import Image
 
 
@@ -625,6 +626,17 @@ class ZooApp:
             )
             lock_button.pack(side="right", padx=(6, 0), anchor="n")
 
+            export_button = ctk.CTkButton(
+                header,
+                text="\U0001F5BC",
+                width=28,
+                height=20,
+                corner_radius=6,
+                font=("Arial", 11),
+                command=lambda i=i: self._export_project_png(i)
+            )
+            export_button.pack(side="right", padx=(6, 0), anchor="n")
+
             # Wraps up to TITLE_MAX_LINES lines instead of clipping to a
             # single line, so the full project name is readable - text is
             # pre-fitted in generate() via fit_multi_line() (see that
@@ -1056,6 +1068,34 @@ class ZooApp:
             self.locked_projects[index] = project
 
         self._apply_lock_button(index)
+
+    def _export_project_png(self, index):
+        project = self.current_projects[index]
+        if not project or project.get("name") == "Failed Project":
+            messagebox.showerror("Error", "Nothing generated for this slot yet.")
+            return
+
+        lookup = self.last_lookup or {}
+        reward = get_project_reward(project, lookup)
+
+        default_name = "".join(c for c in project.get("name", "project") if c not in '<>:"/\\|?*') + ".png"
+        path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            initialfile=default_name,
+            filetypes=[("PNG image", "*.png")],
+            title="Export project card as PNG"
+        )
+        if not path:
+            return
+
+        try:
+            card = render_project_card(project, lookup, reward, base_dir=resource_path(""))
+            card.save(path)
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not export card: {e}")
+            return
+
+        messagebox.showinfo("Exported", f"Saved to {path}")
 
     def render_project(self, container, project, lookup):
         for widget in container.winfo_children():
