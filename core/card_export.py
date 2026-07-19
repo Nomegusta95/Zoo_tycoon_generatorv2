@@ -132,6 +132,23 @@ def _wrap_text(draw, text, font, max_width):
     return lines
 
 
+def _fit_font_wrapped(draw, text, base_dir, bold, max_width, max_size, max_lines=2, min_size=18):
+    """Largest font size (within [min_size, max_size]) whose word-wrapped
+    layout fits within max_lines lines of max_width - unlike _fit_font,
+    which only ever considers one line and so shrinks a long entry (e.g.
+    a multi-word OR pair) all the way down to fit, this lets it drop to a
+    second line instead and stay bigger."""
+    size = max_size
+    while size > min_size:
+        font = _load_font(base_dir, bold, size)
+        lines = _wrap_text(draw, text, font, max_width)
+        if len(lines) <= max_lines:
+            return font, lines
+        size -= 2
+    font = _load_font(base_dir, bold, min_size)
+    return font, _wrap_text(draw, text, font, max_width)
+
+
 def _draw_row_line(draw, x, y, line, font, base_color):
     """Draws one line word-by-word instead of as a single colored string -
     a multiplier count and the literal word "OR" always render in
@@ -254,10 +271,8 @@ def render_project_card(project, lookup, reward, base_dir):
     name_box = tuple(_s(v) for v in NAME_BOX)
     nx0, ny0, nx1, ny1 = name_box
     name_text = (project.get("name") or "").upper()
-    name_font = _fit_font(draw, name_text, base_dir, True, nx1 - nx0, _s(150), min_size=_s(60))
-    lines = _wrap_text(draw, name_text, name_font, nx1 - nx0)
-    if len(lines) > 2:
-        lines = lines[:2]
+    name_font, lines = _fit_font_wrapped(draw, name_text, base_dir, True, nx1 - nx0, _s(150), min_size=_s(60))
+    lines = lines[:2]
     line_h = _text_size(draw, "Ag", name_font)[1] + _s(15)
     total_h = line_h * len(lines)
     ty = ny0 + max(0, (ny1 - ny0 - total_h) // 2)
@@ -292,8 +307,9 @@ def render_project_card(project, lookup, reward, base_dir):
             card.paste(icon, (icon_x, icon_y), icon)
             icon_x += icon_size + _s(15)
 
-        font = _fit_font(draw, display_text, base_dir, True, text_right - text_x, row_font_size, min_size=_s(45))
-        text_lines = _wrap_text(draw, display_text, font, text_right - text_x)
+        font, text_lines = _fit_font_wrapped(
+            draw, display_text, base_dir, True, text_right - text_x, row_font_size, min_size=_s(45)
+        )
         line_h = _text_size(draw, "Ag", font)[1] + _s(12)
         ty = row_y + (row_h - line_h * len(text_lines)) // 2
         for line in text_lines:
