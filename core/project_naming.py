@@ -943,7 +943,7 @@ def generate_project_name(project, theme_type, theme, lookup, difficulty, real_t
             "Shadows of Tasmania",
             "Fury in the Dark",
             "Devil's Domain",
-            "Nocturnal Menace",
+            "Feral Temper",
             "Island of Screams"
         ],
 
@@ -1001,7 +1001,7 @@ def generate_project_name(project, theme_type, theme, lookup, difficulty, real_t
             "Prairie Shadows",
             "Burrowland Reclaimed",
             "Ghosts of the Prairie",
-            "Silent Burrowers",
+            "Masked Hunter",
             "Return from the Dust",
             "Hidden Predators",
             "Underground Revival"
@@ -1020,8 +1020,8 @@ def generate_project_name(project, theme_type, theme, lookup, difficulty, real_t
         "Green sea turtle": [
             "Ancient Tides",
             "Guardians of the Current",
-            "Ocean Travelers",
-            "Endless Migration",
+            "Shell of Ages",
+            "Living Relic",
             "Tides of Time",
             "Sea of Ancients",
             "Currents of Survival"
