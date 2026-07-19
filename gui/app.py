@@ -9,7 +9,10 @@ from core.engine import generate_full_game
 from core.card_export import render_project_card
 from data.data_loader import VALID_PACKS
 from data.seed_store import load_saved_seeds, save_seed_entry, delete_seed_entry
-from gui.theme_data import BADGE_MAP, PACK_LABELS, FILTERS, GROUP_ORDER, GROUP_TITLES, average_badge_color
+from gui.theme_data import (
+    BADGE_MAP, LEVEL3_ANIMAL_BADGES, PACK_LABELS, FILTERS, GROUP_ORDER, GROUP_TITLES,
+    average_badge_color, project_level3_badge_values,
+)
 
 import customtkinter as ctk
 import tkinter as tk
@@ -962,7 +965,7 @@ class ZooApp:
 
         if key not in self.image_cache:
             try:
-                filename = self.badge_map.get(theme_clean)
+                filename = self.badge_map.get(theme_clean) or LEVEL3_ANIMAL_BADGES.get(theme_clean)
 
                 if not filename:
                     print("NO BADGE:", theme_clean)
@@ -1135,50 +1138,45 @@ class ZooApp:
             height=22
         ).pack(side="left")
 
-        theme = project.get("theme")
         symbiosis_badges = project.get("symbiosis_badges") if project.get("symbiosis") else None
 
+        # All 3 shared dimensions (habitat, group, tag) get their own badge
+        # side by side for a symbiosis project, instead of just the
+        # project's own generation theme - see
+        # core.project_naming.symbiosis_badge_traits. Either way, a
+        # level-3 animal's own badge takes over the row entirely when the
+        # project contains one - see gui.theme_data.LEVEL3_ANIMAL_BADGES.
         if symbiosis_badges:
-            # All 3 shared dimensions (habitat, group, tag) get their own
-            # badge side by side, instead of just the project's own
-            # generation theme - see core.project_naming.symbiosis_badge_traits.
-            badge_frame = ctk.CTkFrame(container, fg_color="transparent")
-            badge_frame.pack(pady=(0, 8))
+            badge_values = [value for _dim, value in symbiosis_badges]
+        else:
+            badge_values = [project.get("theme")]
+        level3_values = project_level3_badge_values(project, lookup)
+        if level3_values:
+            badge_values = level3_values
 
-            icons_row = ctk.CTkFrame(badge_frame, fg_color="transparent")
-            icons_row.pack()
+        badge_frame = None
+        label_parts = []
+        icon_images = []
+        for value in badge_values:
+            icon = self.load_badge(value)
+            if not icon:
+                continue
+            if badge_frame is None:
+                badge_frame = ctk.CTkFrame(container, fg_color="transparent")
+                badge_frame.pack(pady=(0, 8))
+                icons_row = ctk.CTkFrame(badge_frame, fg_color="transparent")
+                icons_row.pack()
+            icon_label = ctk.CTkLabel(icons_row, image=icon, text="")
+            icon_label.image = icon
+            icon_label.pack(side="left", padx=4)
+            icon_images.append(icon)
+            label_parts.append((value or "").upper())
 
-            label_parts = []
-            icon_images = []
-            for _dim, value in symbiosis_badges:
-                icon = self.load_badge(value)
-                if not icon:
-                    continue
-                icon_label = ctk.CTkLabel(icons_row, image=icon, text="")
-                icon_label.image = icon
-                icon_label.pack(side="left", padx=4)
-                icon_images.append(icon)
-                label_parts.append(value.upper())
+        if badge_frame is not None:
             icons_row.images = icon_images
-
             if label_parts:
                 ctk.CTkLabel(
                     badge_frame, text=" · ".join(label_parts), font=("Arial", 12, "bold"),
-                    text_color=("#1a1a1a", "#f0f0f0")
-                ).pack()
-        else:
-            badge = self.load_badge(theme)
-
-            if badge:
-                badge_frame = ctk.CTkFrame(container, fg_color="transparent")
-                badge_frame.pack(pady=(0, 8))
-
-                badge_label = ctk.CTkLabel(badge_frame, image=badge, text="")
-                badge_label.image = badge
-                badge_label.pack()
-
-                ctk.CTkLabel(
-                    badge_frame, text=theme.upper(), font=("Arial", 13, "bold"),
                     text_color=("#1a1a1a", "#f0f0f0")
                 ).pack()
 

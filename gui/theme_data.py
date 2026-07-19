@@ -57,6 +57,36 @@ BADGE_MAP = {
     "large": "large.png",
 }
 
+# level-3 animal name (lowercase) -> its own badge image filename under
+# assets/images/badges/ - level-3s are the game's rarest species, so any
+# project that contains one gets that animal's own badge in place of the
+# usual theme/symbiosis badge(s).
+LEVEL3_ANIMAL_BADGES = {
+    "arabian oryx": "arabian_oryx.png",
+    "bearded vulture": "bearded_vulture.png",
+    "black-footed ferret": "black-footed_ferret.png",
+    "bornean orangutan": "bornean_orangutan.png",
+    "golden lion tamarin": "golden_lion_tamarin.png",
+    "green sea turtle": "green_sea_turtle.png",
+    "madagascar pochard": "madagascar_pochard.png",
+    "northern bald ibis": "northern_bald_ibis.png",
+    "przewalski's horse": "przewalskis_horse.png",
+    "tasmanian devil": "tasmanian_devil.png",
+    "zebra shark": "zebra_shark.png",
+}
+
+
+def project_level3_badge_values(project, lookup):
+    """Distinct level-3 animal names (original casing, sorted) this
+    project contains - each is looked up in LEVEL3_ANIMAL_BADGES the same
+    way a theme value is looked up in BADGE_MAP, by whichever frontend is
+    rendering the badge row."""
+    from core.utils import extract_animal_names
+
+    names = extract_animal_names(project.get("animals", []))
+    return sorted(n for n in names if lookup.get(n, {}).get("level") == 3)
+
+
 PACK_LABELS = {
     "base": "Base game",
     "shores": "New Shores",

@@ -38,7 +38,10 @@ from core.card_export import render_project_card
 from data.data_loader import load_animals, VALID_PACKS
 from data.predefined_loader import load_predefined_projects
 from scoring.project_rewards import get_project_reward
-from gui.theme_data import BADGE_MAP, PACK_LABELS, GROUP_TITLES, TIER_LABELS, average_badge_color
+from gui.theme_data import (
+    BADGE_MAP, LEVEL3_ANIMAL_BADGES, PACK_LABELS, GROUP_TITLES, TIER_LABELS,
+    average_badge_color, project_level3_badge_values,
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ANIMALS_PATH = os.path.join(BASE_DIR, "data", "Animals.xlsx")
@@ -106,8 +109,9 @@ def _icon_data_uri(name, variant="normal"):
 
 
 @st.cache_data(show_spinner=False)
-def _badge_data_uri(theme):
-    filename = BADGE_MAP.get((theme or "").strip().lower())
+def _badge_data_uri(value):
+    key = (value or "").strip().lower()
+    filename = BADGE_MAP.get(key) or LEVEL3_ANIMAL_BADGES.get(key)
     if not filename:
         return None
     path = os.path.join(BASE_DIR, "assets", "images", "badges", filename)
@@ -366,30 +370,31 @@ def _render_card(index, project, lookup):
             [value for _dim, value in project["symbiosis_badges"]] if symbiosis
             else [project.get("theme")]
         )
+        # Tint stays theme-only (a level-3 animal's badge shouldn't shift
+        # the card's background color), so it's computed before a level-3
+        # badge potentially takes over the row below.
         tint_style = _card_tint_style(theme_values)
 
+        # A level-3 animal's own badge takes over the row entirely when
+        # the project contains one, instead of the usual theme/symbiosis
+        # badge(s) - see gui.theme_data.LEVEL3_ANIMAL_BADGES.
+        level3_values = project_level3_badge_values(project, lookup)
+        badge_values = level3_values if level3_values else theme_values
+
         badges_html = ""
-        if symbiosis:
-            imgs = []
-            labels = []
-            for _dim, value in project["symbiosis_badges"]:
-                uri = _badge_data_uri(value)
-                if not uri:
-                    continue
-                imgs.append(f'<img class="zoo-badge" src="{uri}">')
-                labels.append(value.upper())
-            if imgs:
-                badges_html = (
-                    f'<div class="badge-row">{"".join(imgs)}</div>'
-                    f'<div class="badge-label">{" &middot; ".join(labels)}</div>'
-                )
-        else:
-            uri = _badge_data_uri(project.get("theme"))
-            if uri:
-                badges_html = (
-                    f'<div class="badge-row"><img class="zoo-badge" src="{uri}"></div>'
-                    f'<div class="badge-label">{(project.get("theme") or "").upper()}</div>'
-                )
+        imgs = []
+        labels = []
+        for value in badge_values:
+            uri = _badge_data_uri(value)
+            if not uri:
+                continue
+            imgs.append(f'<img class="zoo-badge" src="{uri}">')
+            labels.append((value or "").upper())
+        if imgs:
+            badges_html = (
+                f'<div class="badge-row">{"".join(imgs)}</div>'
+                f'<div class="badge-label">{" &middot; ".join(labels)}</div>'
+            )
 
         rows_html = []
         for entry in project.get("animals", []):

@@ -23,7 +23,7 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 
-from gui.theme_data import BADGE_MAP
+from gui.theme_data import BADGE_MAP, LEVEL3_ANIMAL_BADGES, project_level3_badge_values
 from scoring.project_cost import expand_entry
 
 # --- PHYSICAL SIZE ---
@@ -221,16 +221,23 @@ def render_project_card(project, lookup, reward, base_dir):
         tw, th = _text_size(draw, text, font)
         draw.text((x0 + (x1 - x0 - tw) // 2, y0 + (y1 - y0 - th) // 2 - _s(20)), text, font=font, fill=TEXT_WHITE)
 
-    # --- THEME BADGE ICON ---
+    # --- THEME BADGE ICON(S) ---
+    # A level-3 animal's own badge (see gui.theme_data.LEVEL3_ANIMAL_BADGES)
+    # takes over the badge row entirely when the project contains one -
+    # level-3s are the rarest species, so they get marquee treatment
+    # instead of the usual theme/symbiosis category badge(s).
     symbiosis = project.get("symbiosis") and project.get("symbiosis_badges")
     theme_values = [v for _dim, v in project["symbiosis_badges"]] if symbiosis else [project.get("theme")]
+    level3_values = project_level3_badge_values(project, lookup)
+    badge_values = level3_values if level3_values else theme_values
 
     badge_box = tuple(_s(v) for v in BADGE_ICON_BOX)
     bw, bh = badge_box[2] - badge_box[0], badge_box[3] - badge_box[1]
-    icon_size = min(bw, bh) if len(theme_values) == 1 else min(bw // len(theme_values), bh)
+    icon_size = min(bw, bh) if len(badge_values) == 1 else min(bw // len(badge_values), bh)
     icons = []
-    for value in theme_values:
-        filename = BADGE_MAP.get((value or "").strip().lower())
+    for value in badge_values:
+        key = (value or "").strip().lower()
+        filename = BADGE_MAP.get(key) or LEVEL3_ANIMAL_BADGES.get(key)
         if not filename:
             continue
         path = _asset_path(base_dir, BADGE_DIR_PARTS + (filename,))
