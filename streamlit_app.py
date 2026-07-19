@@ -61,6 +61,15 @@ TIER_COLORS = {
 SYMBIOSIS_BORDER = "#d4af37"
 DEFAULT_BORDER = "rgba(128,128,128,0.4)"
 
+# Board tab: physical-game player tokens. Order also sets the active-player
+# picker's left-to-right order.
+PLAYER_COLORS = {
+    "red": "🔴",
+    "blue": "🔵",
+    "green": "🟢",
+    "yellow": "🟡",
+}
+
 
 # -----------------------------------------------------------
 # DATA LOADING (cached across reruns/sessions)
@@ -159,10 +168,31 @@ def _init_state():
         "include_predefined": False,
         "generation_mode": "freeform",
         "saved_seeds": [],
+        "active_player": "red",
+        # project identity -> {"first": color|None, "second": color|None} -
+        # who has "conquered" each reward slot on the Board tab. Keyed by
+        # identity (not plain index) so a locked project keeps its claims
+        # across a regeneration, the same way locked projects keep their
+        # animals - see _project_identity.
+        "conquered": {},
+        # project identity -> rendered card PNG bytes, populated only when
+        # the player taps "Generate Board" (see _render_board) - not
+        # rendered automatically on every rerun, since a claim click reruns
+        # the script and re-rendering all 5 print-quality cards on every
+        # single tap would make the board sluggish for no benefit.
+        "board_card_images": {},
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+
+def _project_identity(index, project):
+    """Identifies "this exact project in this exact slot" - stable across
+    a regeneration for a locked project (same name/animals), so its Board
+    claims survive; a replaced project gets a new identity and its old
+    claims become orphaned (pruned in _run_generation)."""
+    return (index, project.get("name"), tuple(project.get("animals", [])))
 
 
 # -----------------------------------------------------------
@@ -208,6 +238,17 @@ def _run_generation(seed, animals, predefined):
     st.session_state.current_projects = game
     st.session_state.last_game_animals = game_animals
     st.session_state.last_lookup = lookup
+
+    # Drop Board claims for any slot whose project changed (kept for a
+    # locked slot, whose identity is unchanged) - otherwise orphaned
+    # entries pile up in session state as a long session regenerates.
+    live_ids = {_project_identity(i, p) for i, p in enumerate(game) if p}
+    st.session_state.conquered = {
+        k: v for k, v in st.session_state.conquered.items() if k in live_ids
+    }
+    st.session_state.board_card_images = {
+        k: v for k, v in st.session_state.board_card_images.items() if k in live_ids
+    }
 
 
 # -----------------------------------------------------------
@@ -370,6 +411,66 @@ def _render_card(index, project, lookup):
         </div>
         """
         st.markdown(card_html, unsafe_allow_html=True)
+
+
+def _render_board(game, lookup):
+    """Shared 'table screen' view: the currently generated projects with
+    their 1st/2nd reward boxes as tap targets, so whoever's turn it is can
+    mark it conquered in their color - the on-screen equivalent of placing
+    a token on the physical card."""
+    st.caption("Active player")
+    player_cols = st.columns(len(PLAYER_COLORS))
+    for col, (color, emoji) in zip(player_cols, PLAYER_COLORS.items()):
+        with col:
+            is_active = st.session_state.active_player == color
+            label = f"{emoji} {color.capitalize()}" + (" ✓" if is_active else "")
+            if st.button(label, key=f"active_player_{color}", use_container_width=True,
+                         type="primary" if is_active else "secondary"):
+                st.session_state.active_player = color
+                st.rerun()
+
+    st.divider()
+
+    if not any(game):
+        st.info("Generate a game first, then come back here to track who conquers what.")
+        return
+
+    if st.button("🖼️ Generate Board", help="Render each project as its printable card"):
+        for index, project in enumerate(game):
+            if not project:
+                continue
+            identity = _project_identity(index, project)
+            if identity in st.session_state.board_card_images:
+                continue
+            reward = get_project_reward(project, lookup)
+            card_image = render_project_card(project, lookup, reward, base_dir=BASE_DIR)
+            buf = io.BytesIO()
+            card_image.save(buf, format="PNG")
+            st.session_state.board_card_images[identity] = buf.getvalue()
+
+    for index, project in enumerate(game):
+        if not project:
+            continue
+        identity = _project_identity(index, project)
+        claims = st.session_state.conquered.get(identity, {})
+        reward = get_project_reward(project, lookup)
+
+        st.markdown(f"**Project {index + 1}: {project.get('name', 'Unnamed')}**")
+        card_image = st.session_state.board_card_images.get(identity)
+        if card_image:
+            st.image(card_image, width=280)
+        slot_cols = st.columns(2)
+        for col, slot, label in ((slot_cols[0], "first", "1st"), (slot_cols[1], "second", "2nd")):
+            with col:
+                claimed_by = claims.get(slot)
+                prefix = f"{PLAYER_COLORS[claimed_by]} " if claimed_by else ""
+                if st.button(f"{prefix}{label}  {reward[slot]}", key=f"conquer_{index}_{slot}",
+                             use_container_width=True):
+                    entry = dict(st.session_state.conquered.get(identity, {}))
+                    entry[slot] = None if claimed_by else st.session_state.active_player
+                    st.session_state.conquered = {**st.session_state.conquered, identity: entry}
+                    st.rerun()
+        st.markdown("---")
 
 
 def _inject_css():
@@ -627,49 +728,55 @@ def main():
 
     st.title("🦁 Zoo Generator")
 
-    top1, top2, top3 = st.columns([2, 2, 3])
-    with top1:
-        if st.button("🎲 Generate Game", type="primary", use_container_width=True):
-            _run_generation(random.randint(0, 2**31 - 1), animals, predefined)
-    with top2:
-        st.session_state.include_predefined = st.checkbox(
-            "Include predefined projects", value=st.session_state.include_predefined,
-            help="Include projects from the original board game"
-        )
-    with top3:
-        st.session_state.generation_mode = st.radio(
-            "Generation mode",
-            options=["freeform", "restrictive"],
-            format_func=lambda v: v.capitalize(),
-            horizontal=True,
-            index=0 if st.session_state.generation_mode == "freeform" else 1,
-            help=(
-                "Freeform: fast & varied. Only 3-4 of the 6 habitats appear each game, "
-                "and there's no minimum number of species per habitat or group.\n\n"
-                "Restrictive: rulebook-accurate. Doesn't force every habitat or group to "
-                "appear - but whichever ones DO show up are properly represented: at least "
-                "3 species for any active habitat, at least 2 for any active group."
-            ),
-        )
-
-    _render_seed_bar(animals, predefined)
-    _render_sidebar(animals)
-
-    st.divider()
+    generator_tab, board_tab = st.tabs(["🎲 Generator", "🏆 Board"])
 
     game = st.session_state.current_projects
     lookup = st.session_state.last_lookup or {}
 
-    for row_start in range(0, 5, 3):
-        cols = st.columns(3)
-        for offset, col in enumerate(cols):
-            index = row_start + offset
-            if index >= 5:
-                break
-            with col:
-                _render_card(index, game[index], lookup)
+    with generator_tab:
+        top1, top2, top3 = st.columns([2, 2, 3])
+        with top1:
+            if st.button("🎲 Generate Game", type="primary", use_container_width=True):
+                _run_generation(random.randint(0, 2**31 - 1), animals, predefined)
+        with top2:
+            st.session_state.include_predefined = st.checkbox(
+                "Include predefined projects", value=st.session_state.include_predefined,
+                help="Include projects from the original board game"
+            )
+        with top3:
+            st.session_state.generation_mode = st.radio(
+                "Generation mode",
+                options=["freeform", "restrictive"],
+                format_func=lambda v: v.capitalize(),
+                horizontal=True,
+                index=0 if st.session_state.generation_mode == "freeform" else 1,
+                help=(
+                    "Freeform: fast & varied. Only 3-4 of the 6 habitats appear each game, "
+                    "and there's no minimum number of species per habitat or group.\n\n"
+                    "Restrictive: rulebook-accurate. Doesn't force every habitat or group to "
+                    "appear - but whichever ones DO show up are properly represented: at least "
+                    "3 species for any active habitat, at least 2 for any active group."
+                ),
+            )
 
-    _render_summary(st.session_state.last_game_animals)
+        _render_seed_bar(animals, predefined)
+        _render_sidebar(animals)
+
+        st.divider()
+
+        for row_start in range(0, 5, 3):
+            cols = st.columns(3)
+            for offset, col in enumerate(cols):
+                index = row_start + offset
+                if index >= 5:
+                    break
+                with col:
+                    _render_card(index, game[index], lookup)
+
+        _render_summary(st.session_state.last_game_animals)
+
+    with board_tab:
+        _render_board(game, lookup)
 
 
 if __name__ == "__main__":
