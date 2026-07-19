@@ -936,6 +936,169 @@ def generate_project_name(project, theme_type, theme, lookup, difficulty, real_t
     # -----------------------------
     # LEVEL 3 OVERRIDE
     # -----------------------------
+    # One name per (theme_type, theme) a given level-3 animal can actually
+    # carry into a project. A project's theme is only ever chosen from a
+    # value the animals being placed share (see matches_theme() in
+    # core/project_rules.py), so this exhaustively covers every theme a
+    # project containing that animal could land on - nothing outside its
+    # own habitat/groups/tags is reachable. lvl3_names below (generic,
+    # theme-independent) is only a fallback for the case this table
+    # doesn't have an entry for.
+    lvl3_trait_names = {
+        "Tasmanian Devil": {
+            "habitat": {"desert": "Desert Devil"},
+            "group": {"marsupial": "Marsupial Uprising"},
+            "tag": {
+                "solitary": "Lone Devil",
+                "nocturnal": "Midnight Snarl",
+                "endangered": "Vanishing Devil",
+                "burrowing": "Den of the Devil",
+                "arid": "Scorched Territory",
+                "ground": "Ground Fury",
+                "carnivore": "Carnivore's Reign",
+                "australia": "Outback Terror",
+            },
+        },
+        "Bearded vulture": {
+            "habitat": {"mountain": "Mountain Bonebreaker"},
+            "group": {"bird": "Aerial Court"},
+            "tag": {
+                "flying": "Wings Aloft",
+                "egg-laying": "Cliffside Nest",
+                "temperate": "Highland Air",
+                "pack": "Circling Pack",
+                "europe": "Old World Skies",
+                "carnivore": "Talons of the Hunt",
+            },
+        },
+        "Golden Lion Tamarin": {
+            "habitat": {"jungle": "Golden Jungle"},
+            "group": {"primate": "Primate Court"},
+            "tag": {
+                "climbing": "Treetop Royalty",
+                "friendly": "Gentle Gold",
+                "endangered": "Fading Gold",
+                "tiny": "Small Wonder",
+                "tropical": "Tropical Radiance",
+                "omnivore": "Forest Forager",
+                "pack": "Golden Troop",
+                "south america": "Amazon's Gold",
+            },
+        },
+        "Bornean orangutan": {
+            "habitat": {"jungle": "Borneo Canopy"},
+            "group": {"primate": "Elder Primate"},
+            "tag": {
+                "solitary": "Canopy Loner",
+                "climbing": "High Branch Kingdom",
+                "friendly": "Gentle Giant",
+                "endangered": "Vanishing Canopy",
+                "tropical": "Rainforest Sovereign",
+                "omnivore": "Forest Provider",
+                "asia": "Guardian of the East",
+            },
+        },
+        "Arabian oryx": {
+            "habitat": {"savannah": "Savannah Phantom"},
+            "group": {"ungulate": "Hoofed Wanderers"},
+            "tag": {
+                "friendly": "Gentle Herd",
+                "endangered": "Return from the Brink",
+                "arid": "Children of the Dunes",
+                "herd": "White Herd",
+                "horned": "Crescent Horns",
+                "asia": "Sands of Arabia",
+                "ground": "Desert Roamers",
+                "herbivore": "Grazers of the Dunes",
+            },
+        },
+        "Northern bald ibis": {
+            "habitat": {"savannah": "Savannah Skyline"},
+            "group": {"bird": "Flock of Feathers"},
+            "tag": {
+                "flying": "Wings Over the Savannah",
+                "egg-laying": "Cliffside Colony",
+                "endangered": "Last Flock",
+                "tiny": "Small Survivors",
+                "tropical": "Sunlit Wings",
+                "herd": "Gathered Flock",
+                "omnivore": "Foraging Flight",
+                "europe": "Old World Wings",
+            },
+        },
+        "Black-footed ferret": {
+            "habitat": {"tundra": "Frozen Burrow"},
+            "group": {"predator": "Silent Hunter"},
+            "tag": {
+                "north america": "Plains Ghost",
+                "solitary": "Lone Burrower",
+                "cold": "Frost-Touched Prairie",
+                "nocturnal": "Midnight Prowler",
+                "endangered": "Return from Extinction",
+                "tiny": "Small Shadow",
+                "burrowing": "Underground Kingdom",
+                "ground": "Prairie Floor",
+                "carnivore": "Silent Strike",
+            },
+        },
+        "Zebra shark": {
+            "habitat": {"water": "Waters of the Reef"},
+            "group": {"fish": "School of Shadows", "aquatic": "Currents Below"},
+            "tag": {
+                "egg-laying": "Nursery of the Deep",
+                "solitary": "Lone Reef Wanderer",
+                "swimming": "Gliding Through the Blue",
+                "endangered": "Fading Stripes",
+                "ocean": "Depths Unknown",
+                "carnivore": "Hunter of the Reef",
+                "australia": "Southern Waters",
+            },
+        },
+        "Green sea turtle": {
+            "habitat": {"water": "Waters of Time"},
+            "group": {"aquatic": "Ancient Swimmers", "reptile": "Shell of the Deep"},
+            "tag": {
+                "egg-laying": "Sands of the Nest",
+                "north america": "Coastal Guardian",
+                "migratory": "Endless Migration",
+                "ancient": "Living Relic",
+                "solitary": "Solitary Voyager",
+                "friendly": "Gentle Current",
+                "swimming": "Graceful Depths",
+                "endangered": "Fading Shell",
+                "ocean": "Keeper of the Deep",
+                "herbivore": "Grazer of the Reef",
+            },
+        },
+        "Madagascar pochard": {
+            "habitat": {"jungle": "Jungle Marsh"},
+            "group": {"bird": "Rare Flock"},
+            "tag": {
+                "flying": "Wings Above the Marsh",
+                "egg-laying": "Secret Nesting Ground",
+                "wetland": "Marsh Survivor",
+                "endangered": "World's Rarest Duck",
+                "tiny": "Small Miracle",
+                "omnivore": "Marsh Forager",
+                "pack": "Last Flock",
+                "africa": "Malagasy Waters",
+            },
+        },
+        "Przewalski's horse": {
+            "habitat": {"tundra": "Steppe Frontier"},
+            "group": {"ungulate": "Wild Herd Legacy"},
+            "tag": {
+                "friendly": "Gentle Wild Ones",
+                "cold": "Frost-Born Herd",
+                "endangered": "Last Truly Wild",
+                "herd": "Herd of the Steppe",
+                "asia": "Mongolian Plains",
+                "ground": "Hoofprints of the Past",
+                "herbivore": "Grazers of the Steppe",
+            },
+        },
+    }
+
     lvl3_names = {
         "Tasmanian Devil": [
             "Echoes of the Devil",
@@ -1050,6 +1213,10 @@ def generate_project_name(project, theme_type, theme, lookup, difficulty, real_t
 
     if lvl3_animals:
         animal = random.choice(lvl3_animals)
+
+        trait_name = lvl3_trait_names.get(animal, {}).get(theme_type, {}).get(theme)
+        if trait_name:
+            return trait_name
 
         if animal in lvl3_names:
             return random.choice(lvl3_names[animal])
