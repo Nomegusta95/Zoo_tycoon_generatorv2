@@ -730,9 +730,6 @@ def main():
 
     generator_tab, board_tab = st.tabs(["🎲 Generator", "🏆 Board"])
 
-    game = st.session_state.current_projects
-    lookup = st.session_state.last_lookup or {}
-
     with generator_tab:
         top1, top2, top3 = st.columns([2, 2, 3])
         with top1:
@@ -763,6 +760,13 @@ def main():
         _render_sidebar(animals)
 
         st.divider()
+
+        # Read fresh, after the Generate Game button above may have just
+        # updated it - reading this before the button check would render
+        # this same pass's grid (and the Board tab below) with the
+        # pre-click game, only catching up on the NEXT unrelated rerun.
+        game = st.session_state.current_projects
+        lookup = st.session_state.last_lookup or {}
 
         for row_start in range(0, 5, 3):
             cols = st.columns(3)
