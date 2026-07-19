@@ -156,7 +156,7 @@ def _init_state():
         # required-vs-forced distinction.
         "forced_animals": set(),
         "active_packs": set(VALID_PACKS),
-        "include_predefined": True,
+        "include_predefined": False,
         "generation_mode": "freeform",
         "saved_seeds": [],
     }
@@ -633,7 +633,8 @@ def main():
             _run_generation(random.randint(0, 2**31 - 1), animals, predefined)
     with top2:
         st.session_state.include_predefined = st.checkbox(
-            "Include predefined projects", value=st.session_state.include_predefined
+            "Include predefined projects", value=st.session_state.include_predefined,
+            help="Include projects from the original board game"
         )
     with top3:
         st.session_state.generation_mode = st.radio(

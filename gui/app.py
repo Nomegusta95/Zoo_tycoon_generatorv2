@@ -264,12 +264,19 @@ class ZooApp:
             height=34
         ).pack(side="right", padx=16)
 
-        self.include_predefined_var = tk.BooleanVar(value=True)
+        self.include_predefined_var = tk.BooleanVar(value=False)
         ctk.CTkCheckBox(
             top_bar,
             text="Include predefined projects",
             variable=self.include_predefined_var
-        ).pack(side="right", padx=(0, 16))
+        ).pack(side="right", padx=(0, 4))
+
+        predefined_help_icon = ctk.CTkLabel(
+            top_bar, text="ⓘ", font=("Arial", 14, "bold"),
+            text_color="gray60", width=18
+        )
+        predefined_help_icon.pack(side="right", padx=(0, 12))
+        Tooltip(predefined_help_icon, "Include projects from the original board game")
 
         mode_help_icon = ctk.CTkLabel(
             top_bar, text="ⓘ", font=("Arial", 14, "bold"),
