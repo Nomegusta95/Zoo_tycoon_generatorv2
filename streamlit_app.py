@@ -30,6 +30,7 @@ from collections import Counter
 from datetime import datetime
 
 import streamlit as st
+import streamlit.components.v1 as components
 from PIL import Image
 
 from core.engine import generate_full_game
@@ -158,24 +159,10 @@ def _init_state():
         "include_predefined": True,
         "generation_mode": "freeform",
         "saved_seeds": [],
-        # cache_key -> PNG bytes, populated lazily on export click (see
-        # _render_card) instead of eagerly re-rendering all 5 cards'
-        # exports on every single script rerun (any widget interaction,
-        # not just Generate) - cleared on each new generation in
-        # _run_generation so it doesn't grow unbounded over a session.
-        "exported_card_cache": {},
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
-
-
-def _card_cache_key(index, project):
-    """Identifies "this exact project in this exact slot" for
-    exported_card_cache - a locked project keeps the same key across a
-    regeneration (same name/animals), so its cached export survives;
-    anything replaced gets a new key and the old entry is pruned."""
-    return (index, project.get("name"), tuple(project.get("animals", [])))
 
 
 # -----------------------------------------------------------
@@ -221,15 +208,6 @@ def _run_generation(seed, animals, predefined):
     st.session_state.current_projects = game
     st.session_state.last_game_animals = game_animals
     st.session_state.last_lookup = lookup
-
-    # Prune the export cache down to just what's still relevant - keeps
-    # a locked project's cached PNG (its cache key is unchanged, since
-    # it's the same project dict) while dropping everything replaced by
-    # this generation, instead of growing unbounded over a long session.
-    live_keys = {_card_cache_key(i, p) for i, p in enumerate(game) if p}
-    st.session_state.exported_card_cache = {
-        k: v for k, v in st.session_state.exported_card_cache.items() if k in live_keys
-    }
 
 
 # -----------------------------------------------------------
@@ -321,21 +299,23 @@ def _render_card(index, project, lookup):
         reward = get_project_reward(project, lookup)
 
         with export_col:
-            cache_key = _card_cache_key(index, project)
-            cached_png = st.session_state.exported_card_cache.get(cache_key)
-            safe_name = "".join(c for c in project.get("name", "project") if c not in '<>:"/\\|?*')
-
-            if cached_png is not None:
-                st.download_button(
-                    "🖼️", data=cached_png, file_name=f"{safe_name}.png", mime="image/png",
-                    key=f"export_dl_{index}", help="Download this project as a printable PNG card"
-                )
-            elif st.button("🖼️", key=f"export_prep_{index}", help="Prepare this project as a printable PNG card"):
+            # st.button only returns True on the single rerun triggered by
+            # the click itself, so the render below only ever runs once per
+            # actual click - no eager per-rerun regeneration, and (unlike
+            # st.download_button, whose data must be computed before the
+            # button is even drawn) the browser download fires on this same
+            # click instead of needing a second one.
+            if st.button("🖼️", key=f"export_{index}", help="Download this project as a printable PNG card"):
                 card_image = render_project_card(project, lookup, reward, base_dir=BASE_DIR)
                 buf = io.BytesIO()
                 card_image.save(buf, format="PNG")
-                st.session_state.exported_card_cache[cache_key] = buf.getvalue()
-                st.rerun()
+                safe_name = "".join(c for c in project.get("name", "project") if c not in '<>:"/\\|?*')
+                b64 = base64.b64encode(buf.getvalue()).decode()
+                components.html(
+                    f'<a id="dl" href="data:image/png;base64,{b64}" download="{safe_name}.png"></a>'
+                    f'<script>document.getElementById("dl").click();</script>',
+                    height=0,
+                )
 
         symbiosis = project.get("symbiosis") and project.get("symbiosis_badges")
         border_color = SYMBIOSIS_BORDER if symbiosis else DEFAULT_BORDER
