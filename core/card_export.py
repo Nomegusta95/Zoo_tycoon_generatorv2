@@ -62,6 +62,8 @@ ROW_HEIGHT = 480                           # 5 rows max: 1950 + 5*480 = 4350, wi
 ROW_ICON_SIZE = 360
 ROW_TEXT_X = 960                           # nudged right of LEFT_MARGIN+2*ROW_ICON_SIZE so an OR row's two icons never crowd the text
 ROW_TEXT_RIGHT_MARGIN = 90
+ROW_FONT_SIZE = 95
+ROW_FONT_MIN_SIZE = 45
 LEFT_MARGIN = 178
 
 TEXT_BROWN = (60, 45, 34)  # animal names, divider
@@ -291,7 +293,7 @@ def render_project_card(project, lookup, reward, base_dir):
     icon_size = _s(ROW_ICON_SIZE)
     text_x = _s(ROW_TEXT_X)
     text_right = CARD_WIDTH_PX - _s(ROW_TEXT_RIGHT_MARGIN)
-    row_font_size = _s(95)
+    row_font_size = _s(ROW_FONT_SIZE)
 
     for entry in project.get("animals", []):
         icon_specs, display_text = _format_row(entry)
@@ -308,7 +310,7 @@ def render_project_card(project, lookup, reward, base_dir):
             icon_x += icon_size + _s(15)
 
         font, text_lines = _fit_font_wrapped(
-            draw, display_text, base_dir, True, text_right - text_x, row_font_size, min_size=_s(45)
+            draw, display_text, base_dir, True, text_right - text_x, row_font_size, min_size=_s(ROW_FONT_MIN_SIZE)
         )
         line_h = _text_size(draw, "Ag", font)[1] + _s(12)
         ty = row_y + (row_h - line_h * len(text_lines)) // 2
