@@ -693,6 +693,23 @@ SYMBIOSIS_SUFFIXES = [
     "Equilibrium",
 ]
 
+# Names for a project containing two level-3 animals (see the LEGENDARY
+# OVERRIDE section below) - generic rather than pair-specific, since which
+# two of the 11 level-3 animals end up together is effectively random
+# (LEGENDARY_DOUBLE_LVL3_CHANCE in core/project_rules.py is only ~1.5%,
+# so writing bespoke names for all 55 possible pairs would mostly go
+# unseen) and each entry's own row icon/badge already carries its
+# specific identity.
+LEGENDARY_DOUBLE_NAMES = [
+    "Legendary Convergence",
+    "Where Two Legends Meet",
+    "Rarest of the Rare",
+    "Twin Legends",
+    "Alliance of the Rare",
+    "Legends United",
+    "A Once-in-a-Lifetime Sighting",
+]
+
 
 def _animal_trait_set(a):
     """(dimension, value) pairs for one animal - habitats/groups/tags are
@@ -866,28 +883,6 @@ def extract_groups(project, lookup):
 def generate_project_name(project, theme_type, theme, lookup, difficulty, real_theme=None, is_symbiosis=False):
 
     # -----------------------------
-    # SYMBIOSIS OVERRIDE
-    # -----------------------------
-    # Checked before the special/lvl3 overrides below - a 3-way trait
-    # alignment across the whole project is a rarer, more structural
-    # distinction than a single named animal being present, so it takes
-    # priority for naming (and gets its own golden frame in the GUI - see
-    # the "symbiosis" key the caller stores on the project dict).
-    #
-    # is_symbiosis is decided by the caller (project_generator.py), not
-    # recomputed here - a project can structurally QUALIFY as symbiosis
-    # (see is_symbiosis_project) without actually BECOMING one, since
-    # only SYMBIOSIS_CHANCE of eligible projects get the treatment. The
-    # caller rolls that once and passes the result in, so naming and the
-    # "symbiosis"/"symbiosis_badges" dict keys (and the GUI's golden
-    # frame) all agree on the same outcome instead of rolling separately.
-    if is_symbiosis:
-        core_identity = build_core_identity(theme_type, theme)
-        suffix = random.choice(SYMBIOSIS_SUFFIXES)
-        return f"{core_identity} {suffix}"
-
-
-    # -----------------------------
     # ANALYZE PROJECT
     # -----------------------------
     has_or = any(" OR " in e for e in project)
@@ -917,6 +912,43 @@ def generate_project_name(project, theme_type, theme, lookup, difficulty, real_t
 
             if a.get("special"):
                 special_animals.append(name)
+
+    # -----------------------------
+    # LEGENDARY OVERRIDE (two level-3 animals in one project)
+    # -----------------------------
+    # MAX_LVL3_PER_PROJECT is normally 1 - a project ever containing 2 is
+    # only possible because core.project_generator rolled the rare
+    # LEGENDARY_DOUBLE_LVL3_CHANCE exception for this attempt (see
+    # can_add_lvl3's max_count override there). Detected here directly
+    # from the finished project rather than threaded through as another
+    # is_symbiosis-style flag, since (unlike symbiosis) there's no
+    # "eligible but didn't roll it" state to disambiguate - either the
+    # project ended up with 2 level-3s or it didn't. Takes priority over
+    # symbiosis - two level-3s sharing a project is the rarer, more
+    # special outcome of the two.
+    if len(lvl3_animals) >= 2:
+        return random.choice(LEGENDARY_DOUBLE_NAMES)
+
+    # -----------------------------
+    # SYMBIOSIS OVERRIDE
+    # -----------------------------
+    # Checked before the special/lvl3 overrides below - a 3-way trait
+    # alignment across the whole project is a rarer, more structural
+    # distinction than a single named animal being present, so it takes
+    # priority for naming (and gets its own golden frame in the GUI - see
+    # the "symbiosis" key the caller stores on the project dict).
+    #
+    # is_symbiosis is decided by the caller (project_generator.py), not
+    # recomputed here - a project can structurally QUALIFY as symbiosis
+    # (see is_symbiosis_project) without actually BECOMING one, since
+    # only SYMBIOSIS_CHANCE of eligible projects get the treatment. The
+    # caller rolls that once and passes the result in, so naming and the
+    # "symbiosis"/"symbiosis_badges" dict keys (and the GUI's golden
+    # frame) all agree on the same outcome instead of rolling separately.
+    if is_symbiosis:
+        core_identity = build_core_identity(theme_type, theme)
+        suffix = random.choice(SYMBIOSIS_SUFFIXES)
+        return f"{core_identity} {suffix}"
 
     # -----------------------------
     # SPECIAL OVERRIDE

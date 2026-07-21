@@ -60,9 +60,20 @@ RANGES = {
     "hard": (9, 11)
 }
 
+# A legendary project (2 level-3 animals, see LEGENDARY_DOUBLE_LVL3_CHANCE
+# below) gets a wider "hard" ceiling than an ordinary hard project -
+# LEGENDARY_DOUBLE_LVL3_BONUS in scoring/project_rewards.py routinely
+# pushes its difficulty past RANGES["hard"]'s normal 11, and rejecting it
+# there would throw away most legendary rolls instead of ever showing
+# them. Only applies when is_valid_project is told the project is
+# legendary - every other hard project still caps at 11.
+LEGENDARY_HARD_MAX = 15
 
-def is_within_difficulty_range(difficulty, tier):
+
+def is_within_difficulty_range(difficulty, tier, is_legendary=False):
     min_target, max_target = RANGES[tier]
+    if is_legendary and tier == "hard":
+        max_target = LEGENDARY_HARD_MAX
     return min_target <= difficulty <= max_target
 
 
@@ -105,9 +116,16 @@ MAX_SPECIAL_PER_PROJECT = 1
 MAX_OR_PER_PROJECT = 2
 MAX_MULTIPLIER_PER_PROJECT = 3
 
+# Rare exception to MAX_LVL3_PER_PROJECT - rolled once per generation
+# attempt (see project_generator.py) to let that attempt's build loop add
+# a 2nd level-3 animal if one happens to fit the theme. Doesn't force a
+# 2nd to appear, just permits one - see generate_project_name's LEGENDARY
+# OVERRIDE for how this gets its own name once it does.
+LEGENDARY_DOUBLE_LVL3_CHANCE = 0.015
 
-def can_add_lvl3(current_count):
-    return current_count < MAX_LVL3_PER_PROJECT
+
+def can_add_lvl3(current_count, max_count=MAX_LVL3_PER_PROJECT):
+    return current_count < max_count
 
 
 def can_add_special(current_count):
@@ -301,16 +319,17 @@ def generate_multiplier_values(a):
 
 # --- FAILURE CONDITIONS ---
 
-def is_valid_project(project, difficulty, tier):
+def is_valid_project(project, difficulty, tier, is_legendary=False):
     """
     Final validation:
     - size ≥ 3
-    - difficulty within range
+    - difficulty within range (a legendary project gets a wider "hard"
+      ceiling - see LEGENDARY_HARD_MAX)
     """
     if len(project) < MIN_PROJECT_SIZE:
         return False
 
-    if not is_within_difficulty_range(difficulty, tier):
+    if not is_within_difficulty_range(difficulty, tier, is_legendary=is_legendary):
         return False
 
     return True

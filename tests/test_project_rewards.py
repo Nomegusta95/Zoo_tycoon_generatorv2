@@ -10,6 +10,8 @@ from scoring.project_rewards import (
     COSPECIES_SMALL_DISCOUNT,
     MIN_DIFFICULTY,
     DIFFICULTY_FLOOR,
+    LVL3_PROJECT_BONUS,
+    LEGENDARY_DOUBLE_LVL3_BONUS,
 )
 
 
@@ -50,6 +52,25 @@ def test_slot_weight_hierarchy_is_strictly_increasing():
     d_special = difficulty_for(special)
 
     assert d_cospecies < d_lvl1 < d_lvl2 < d_lvl3 < d_special
+
+
+# --- legendary (2 level-3 animals in one project) ---
+
+def test_second_lvl3_animal_adds_legendary_bonus_on_top_of_lvl3_bonus():
+    lvl3_a = make_animal("Lvl3A", level=3)
+    lvl3_b = make_animal("Lvl3B", level=3)
+    filler = make_animal("Filler", level=1)
+    lookup = make_lookup(lvl3_a, lvl3_b, filler)
+
+    one_lvl3 = compute_difficulty(["Lvl3A", "Filler", "Filler"], lookup)
+    two_lvl3 = compute_difficulty(["Lvl3A", "Lvl3B", "Filler"], lookup)
+
+    # Swapping one Filler slot for a 2nd lvl3 slot changes total by that
+    # slot's own weight difference, plus LEGENDARY_DOUBLE_LVL3_BONUS once
+    # a 2nd lvl3 is present (LVL3_PROJECT_BONUS itself doesn't change -
+    # both projects already have at least one lvl3 animal).
+    expected_delta = (SLOT_WEIGHTS[3] - SLOT_WEIGHTS[1]) + LEGENDARY_DOUBLE_LVL3_BONUS
+    assert two_lvl3 - one_lvl3 == expected_delta
 
 
 def test_special_stacks_with_level_weight():

@@ -23,6 +23,8 @@ from core.project_rules import (
     tier_for_difficulty,
     MAX_OR_PER_PROJECT,
     MAX_MULTIPLIER_PER_PROJECT,
+    MAX_LVL3_PER_PROJECT,
+    LEGENDARY_DOUBLE_LVL3_CHANCE,
     matches_theme,
     matches_special_theme
 )
@@ -110,6 +112,12 @@ def generate_project(animals, usage, lookup=None, usable=None):
 
     target_size = random.choice([3, 4, 5])
 
+    # Rare exception letting this attempt's build loop add a 2nd level-3
+    # animal if one happens to fit the theme (see LEGENDARY_DOUBLE_LVL3_CHANCE) -
+    # rolled once per attempt, not per candidate, same reasoning as
+    # can_apply_or/should_apply_multiplier being rolled once per pass.
+    max_lvl3 = 2 if random.random() < LEGENDARY_DOUBLE_LVL3_CHANCE else MAX_LVL3_PER_PROJECT
+
     # -------------------------
     # BUILD BASE
     # -------------------------
@@ -129,7 +137,7 @@ def generate_project(animals, usage, lookup=None, usable=None):
         if not can_use_animal_global(a, usage.get(name, 0)):
             continue
 
-        if a["level"] == 3 and not can_add_lvl3(lvl3_count):
+        if a["level"] == 3 and not can_add_lvl3(lvl3_count, max_lvl3):
             continue
 
         if a.get("special") and not can_add_special(special_count):
@@ -288,8 +296,11 @@ def generate_project(animals, usage, lookup=None, usable=None):
 
     # Reject projects whose difficulty doesn't actually fall in range for
     # their tier (e.g. multiplier/OR stacking pushed a "hard" project past
-    # RANGES["hard"][1]). Caller treats None as a failed attempt and retries.
-    if not is_valid_project(project, difficulty, tier):
+    # RANGES["hard"][1]) - except a legendary (2 level-3) project, which
+    # gets a wider ceiling (LEGENDARY_HARD_MAX) since LEGENDARY_DOUBLE_LVL3_BONUS
+    # routinely pushes it past the normal one. Caller treats None as a
+    # failed attempt and retries.
+    if not is_valid_project(project, difficulty, tier, is_legendary=lvl3_count >= 2):
         return None
 
     # Usage is only committed once a project is fully accepted - a

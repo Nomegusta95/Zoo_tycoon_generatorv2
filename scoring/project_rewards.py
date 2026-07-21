@@ -22,9 +22,16 @@ SPECIAL_WEIGHT = 2.75
 # own SLOT_WEIGHTS[3] entry - a level-3 species is the rarest non-special
 # tier, and a project built around one should read as noticeably harder
 # than the same project would with a level-2 in its place, not just
-# +0.25 harder. MAX_LVL3_PER_PROJECT is 1, so this is a flat per-project
-# bump rather than something that needs to scale with a count.
+# +0.25 harder. Flat per-project (not per-animal) even on a rare legendary
+# project with 2 level-3s - LEGENDARY_DOUBLE_LVL3_BONUS below is the
+# per-project bump for that instead.
 LVL3_PROJECT_BONUS = 1.5
+
+# On top of LVL3_PROJECT_BONUS - a legendary project (2 level-3 animals,
+# see core.project_rules.LEGENDARY_DOUBLE_LVL3_CHANCE) should pay out
+# noticeably more than an ordinary single-lvl3 project, not just whatever
+# the 2nd animal's own SLOT_WEIGHTS entry happens to add.
+LEGENDARY_DOUBLE_LVL3_BONUS = 3
 
 # More MAIN animals is harder on its own, beyond what summing slot
 # weights already implies - each main slot past the minimum size of 3
@@ -88,7 +95,7 @@ def compute_difficulty(entries, lookup):
     or_count = 0
     main_count = 0
     cospecies_count = 0
-    has_lvl3 = False
+    lvl3_count = 0
 
     for entry in entries:
         parts = entry.split(" OR ")
@@ -124,14 +131,16 @@ def compute_difficulty(entries, lookup):
             else:
                 main_count += 1
                 if animal["level"] == 3:
-                    has_lvl3 = True
+                    lvl3_count += 1
 
     effective_size_count = main_count + COSPECIES_SIZE_BONUS_RATE * cospecies_count
     total += SIZE_BONUS_PER_SLOT * max(0, effective_size_count - 3)
     total -= OR_DISCOUNT * or_count
 
-    if has_lvl3:
+    if lvl3_count >= 1:
         total += LVL3_PROJECT_BONUS
+    if lvl3_count >= 2:
+        total += LEGENDARY_DOUBLE_LVL3_BONUS
 
     return max(total, DIFFICULTY_FLOOR)
 
