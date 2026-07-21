@@ -271,16 +271,18 @@ SECOND_MULTIPLIER_CHANCE = 0.12
 THIRD_MULTIPLIER_CHANCE = 0.04
 
 
-# A project needs at least this many main (non-cospecies) species to carry
-# its own difficulty on their own merits - below that, cospecies are doing
-# too much of the work (they're easier to come by than main species), so
-# the first multiplier isn't left to chance, it's guaranteed.
-MIN_MAIN_SPECIES_FOR_OPTIONAL_MULTIPLIER = 3
+# A project with this many main (non-cospecies) species or fewer needs a
+# multiplier more often to carry its own difficulty on their own merits -
+# below that, cospecies are doing too much of the work (they're easier to
+# come by than main species). Bumped well above the flat 1st-multiplier
+# rate (MULTIPLIER_CHANCE) rather than guaranteed outright.
+LOW_MAIN_SPECIES_THRESHOLD = 3
+LOW_MAIN_SPECIES_MULTIPLIER_CHANCE = 0.70
 
 
 def should_apply_multiplier(existing_count=0, main_species_count=None):
-    if existing_count == 0 and main_species_count is not None and main_species_count < MIN_MAIN_SPECIES_FOR_OPTIONAL_MULTIPLIER:
-        return True
+    if existing_count == 0 and main_species_count is not None and main_species_count <= LOW_MAIN_SPECIES_THRESHOLD:
+        return random.random() < LOW_MAIN_SPECIES_MULTIPLIER_CHANCE
     chances = (MULTIPLIER_CHANCE, SECOND_MULTIPLIER_CHANCE, THIRD_MULTIPLIER_CHANCE)
     chance = chances[existing_count] if existing_count < len(chances) else 0
     return random.random() < chance
