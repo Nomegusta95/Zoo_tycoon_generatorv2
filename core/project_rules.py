@@ -103,7 +103,7 @@ def valid_themes(pool, min_size=3):
 MAX_LVL3_PER_PROJECT = 1
 MAX_SPECIAL_PER_PROJECT = 1
 MAX_OR_PER_PROJECT = 2
-MAX_MULTIPLIER_PER_PROJECT = 2
+MAX_MULTIPLIER_PER_PROJECT = 3
 
 
 def can_add_lvl3(current_count):
@@ -134,31 +134,20 @@ def passes_difficulty_gap_rules(animal_cost, gap):
 
 # --- OR RULES ---
 
-# OR discounts difficulty (see OR_DISCOUNT in scoring/project_rewards.py),
-# so an easy project doesn't need it and a hard project benefits from the
-# fallback it gives the player - the opposite trend from
-# MULTIPLIER_CHANCE, which is more common on easy tiers because a
-# multiplier adds difficulty instead. Keyed by the project's tier at the
-# time each OR is considered (not a fixed absolute-difficulty threshold),
-# so the frequency trend holds regardless of where RANGES happens to put
-# each tier's band.
-OR_CHANCE = {
-    "easy": 0.05,
-    "medium": 0.35,
-    "hard": 0.55,
-}
-SECOND_OR_CHANCE = {
-    "easy": 0.02,
-    "medium": 0.12,
-    "hard": 0.25,
-}
+# Flat chance, not keyed by the project's tier-so-far - OR/multiplier
+# choices are what should determine a project's difficulty, not the other
+# way around, so they're rolled independently of it. Set to what used to
+# be the "medium" tier's rate (the middle case) rather than picking new
+# numbers from scratch.
+OR_CHANCE = 0.35
+SECOND_OR_CHANCE = 0.12
 
 
-def can_apply_or(project, difficulty):
+def can_apply_or(project):
     """
     Controls OR appearance frequency:
-    - chance scales with tier (rare on easy, common on hard)
-    - 2nd OR is rarer than the 1st, at every tier
+    - flat chance, independent of the project's difficulty so far
+    - 2nd OR is rarer than the 1st
     """
 
     or_count = sum(1 for e in project if " OR " in e)
@@ -167,13 +156,11 @@ def can_apply_or(project, difficulty):
     if or_count >= MAX_OR_PER_PROJECT:
         return False
 
-    tier = tier_for_difficulty(difficulty)
-
     # --- PROBABILITY CONTROL ---
     if or_count == 0:
-        return random.random() < OR_CHANCE.get(tier, 0)
+        return random.random() < OR_CHANCE
     elif or_count == 1:
-        return random.random() < SECOND_OR_CHANCE.get(tier, 0)
+        return random.random() < SECOND_OR_CHANCE
 
     return False
 
@@ -274,23 +261,14 @@ def can_have_multiplier(a):
     return a.get("tile", 1) >= 1
 
 
-# Chance a multiplier is added at all, keyed by the project's tier
-# *before* the multiplier bonus is factored in. Lower on harder tiers so
-# multipliers read as a notable easy-project feature rather than a
-# guaranteed stack on top of already-hard projects - the opposite trend
-# from OR_CHANCE, since a multiplier adds difficulty instead of
-# discounting it. A 2nd multiplier (up to MAX_MULTIPLIER_PER_PROJECT) is
-# rarer than the 1st, at every tier - mirrors SECOND_OR_CHANCE.
-MULTIPLIER_CHANCE = {
-    "easy": 0.70,
-    "medium": 0.40,
-    "hard": 0.15,
-}
-SECOND_MULTIPLIER_CHANCE = {
-    "easy": 0.25,
-    "medium": 0.12,
-    "hard": 0.05,
-}
+# Flat chance a multiplier is added at all - not keyed by tier, same
+# reasoning as OR_CHANCE above: OR/multiplier choices should determine
+# difficulty, not react to a difficulty computed before they're applied.
+# Each successive multiplier (up to MAX_MULTIPLIER_PER_PROJECT) is rarer
+# than the last - mirrors SECOND_OR_CHANCE.
+MULTIPLIER_CHANCE = 0.40
+SECOND_MULTIPLIER_CHANCE = 0.12
+THIRD_MULTIPLIER_CHANCE = 0.04
 
 
 # A project needs at least this many main (non-cospecies) species to carry
@@ -300,11 +278,12 @@ SECOND_MULTIPLIER_CHANCE = {
 MIN_MAIN_SPECIES_FOR_OPTIONAL_MULTIPLIER = 3
 
 
-def should_apply_multiplier(tier, existing_count=0, main_species_count=None):
+def should_apply_multiplier(existing_count=0, main_species_count=None):
     if existing_count == 0 and main_species_count is not None and main_species_count < MIN_MAIN_SPECIES_FOR_OPTIONAL_MULTIPLIER:
         return True
-    table = MULTIPLIER_CHANCE if existing_count == 0 else SECOND_MULTIPLIER_CHANCE
-    return random.random() < table.get(tier, 0)
+    chances = (MULTIPLIER_CHANCE, SECOND_MULTIPLIER_CHANCE, THIRD_MULTIPLIER_CHANCE)
+    chance = chances[existing_count] if existing_count < len(chances) else 0
+    return random.random() < chance
 
 
 def generate_multiplier_values(a):

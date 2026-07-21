@@ -18,6 +18,7 @@ from core.project_rules import (
     SECOND_OR_CHANCE,
     MULTIPLIER_CHANCE,
     SECOND_MULTIPLIER_CHANCE,
+    THIRD_MULTIPLIER_CHANCE,
 )
 
 
@@ -125,29 +126,26 @@ def test_has_similarity_false_when_nothing_shared():
 
 def test_can_apply_or_false_at_or_limit():
     project = ["A OR B", "C OR D"][:MAX_OR_PER_PROJECT]
-    assert can_apply_or(project, RANGES["hard"][1]) is False
+    assert can_apply_or(project) is False
 
 
-# --- OR_CHANCE / MULTIPLIER_CHANCE hierarchy ---
-# OR discounts difficulty so it should get MORE common as tier goes up
-# (easy doesn't need it); a multiplier adds difficulty so it should get
-# LESS common as tier goes up (easy benefits most). Mirrors the
-# strictly-increasing SLOT_WEIGHTS hierarchy in scoring/project_rewards.py.
+# --- OR_CHANCE / MULTIPLIER_CHANCE: flat, not tier-keyed ---
+# OR/multiplier choices are what determine a project's difficulty, so
+# their chance can't be conditioned on a difficulty computed before
+# they're applied - see the "flat frequency" comments in project_rules.py.
 
-def test_or_chance_increases_with_tier():
-    assert OR_CHANCE["easy"] < OR_CHANCE["medium"] < OR_CHANCE["hard"]
-    assert SECOND_OR_CHANCE["easy"] < SECOND_OR_CHANCE["medium"] < SECOND_OR_CHANCE["hard"]
-
-
-def test_multiplier_chance_decreases_with_tier():
-    assert MULTIPLIER_CHANCE["easy"] > MULTIPLIER_CHANCE["medium"] > MULTIPLIER_CHANCE["hard"]
-    assert SECOND_MULTIPLIER_CHANCE["easy"] > SECOND_MULTIPLIER_CHANCE["medium"] > SECOND_MULTIPLIER_CHANCE["hard"]
+def test_or_and_multiplier_chances_are_flat_probabilities():
+    for value in (OR_CHANCE, SECOND_OR_CHANCE, MULTIPLIER_CHANCE, SECOND_MULTIPLIER_CHANCE, THIRD_MULTIPLIER_CHANCE):
+        assert 0 <= value <= 1
 
 
 def test_second_chance_always_rarer_than_first():
-    for tier in ("easy", "medium", "hard"):
-        assert SECOND_OR_CHANCE[tier] < OR_CHANCE[tier]
-        assert SECOND_MULTIPLIER_CHANCE[tier] < MULTIPLIER_CHANCE[tier]
+    assert SECOND_OR_CHANCE < OR_CHANCE
+    assert SECOND_MULTIPLIER_CHANCE < MULTIPLIER_CHANCE
+
+
+def test_third_multiplier_chance_rarer_than_second():
+    assert THIRD_MULTIPLIER_CHANCE < SECOND_MULTIPLIER_CHANCE
 
 
 # --- matches_theme / matches_special_theme ---

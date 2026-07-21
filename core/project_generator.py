@@ -1,7 +1,7 @@
 import random
 from core.project_naming import generate_project_name, is_symbiosis_project, symbiosis_badge_traits, SYMBIOSIS_CHANCE
 from scoring.project_cost import expand_entry
-from scoring.project_rewards import get_project_reward, compute_difficulty
+from scoring.project_rewards import get_project_reward
 from core.utils import (
     normalize_entry as normalize_name,
     extract_animal_names as extract_names,
@@ -156,7 +156,10 @@ def generate_project(animals, usage, lookup=None, usable=None):
         return None
 
     # -------------------------
-    # OR (tier-based frequency - see OR_CHANCE/SECOND_OR_CHANCE)
+    # OR (flat frequency - see OR_CHANCE/SECOND_OR_CHANCE. Rolled without
+    # regard to the project's difficulty so far: OR/multiplier choices are
+    # what should determine the final difficulty, not react to a
+    # difficulty computed before they're applied - see FINAL below.)
     # -------------------------
     attempts = 0
     while attempts < 5:
@@ -165,17 +168,11 @@ def generate_project(animals, usage, lookup=None, usable=None):
         if or_count >= MAX_OR_PER_PROJECT:
             break
 
-        # Recomputed each pass - OR_DISCOUNT lowers difficulty as ORs get
-        # added, so a project can drift into an easier tier mid-loop and
-        # the 2nd OR's chance should reflect that, not a stale value from
-        # before the 1st OR was applied.
-        difficulty = compute_difficulty(project, lookup)
-
         # Rolled ONCE per pass, not once per candidate entry below - OR_CHANCE
         # is meant to be "chance this project gets its Nth OR", not "chance
         # per entry", which would silently compound across every eligible
         # entry tried and make the configured percentages meaningless.
-        if not can_apply_or(project, difficulty):
+        if not can_apply_or(project):
             break
 
         applied = False
@@ -222,8 +219,8 @@ def generate_project(animals, usage, lookup=None, usable=None):
         attempts += 1
 
     # -------------------------
-    # MULTIPLIER (tier-based frequency, up to MAX_MULTIPLIER_PER_PROJECT -
-    # see MULTIPLIER_CHANCE/SECOND_MULTIPLIER_CHANCE)
+    # MULTIPLIER (flat frequency, up to MAX_MULTIPLIER_PER_PROJECT - see
+    # MULTIPLIER_CHANCE/SECOND_MULTIPLIER_CHANCE and the OR note above)
     # -------------------------
     # (slot_index, side_index) pairs already multiplied - side_index is
     # always 0 for a plain entry, but 0 or 1 for an OR pair, since either
@@ -242,14 +239,7 @@ def generate_project(animals, usage, lookup=None, usable=None):
 
     while len(multiplied_slots) < MAX_MULTIPLIER_PER_PROJECT and can_use_multiplier(project, lookup):
 
-        # Recomputed each pass, same reasoning as the OR loop above - the
-        # 1st multiplier's bonus can already push the project into a
-        # harder tier, and the 2nd multiplier's chance should reflect
-        # that rather than a stale pre-multiplier value.
-        pre_mult_difficulty = compute_difficulty(project, lookup)
-        pre_mult_tier = tier_for_difficulty(pre_mult_difficulty)
-
-        if not should_apply_multiplier(pre_mult_tier, len(multiplied_slots), main_species_count):
+        if not should_apply_multiplier(len(multiplied_slots), main_species_count):
             break
 
         weighted_candidates = []
