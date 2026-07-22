@@ -290,12 +290,11 @@ THIRD_MULTIPLIER_CHANCE = 0.04
 
 
 # A project with this many main (non-cospecies) species or fewer needs a
-# multiplier more often to carry its own difficulty on their own merits -
-# below that, cospecies are doing too much of the work (they're easier to
-# come by than main species). Bumped well above the flat 1st-multiplier
-# rate (MULTIPLIER_CHANCE) rather than guaranteed outright.
+# multiplier to carry its own difficulty on their own merits - below
+# that, cospecies are doing too much of the work (they're easier to come
+# by than main species) - so it's guaranteed, not left to chance.
 LOW_MAIN_SPECIES_THRESHOLD = 3
-LOW_MAIN_SPECIES_MULTIPLIER_CHANCE = 0.70
+LOW_MAIN_SPECIES_MULTIPLIER_CHANCE = 1.0
 
 
 def should_apply_multiplier(existing_count=0, main_species_count=None):
